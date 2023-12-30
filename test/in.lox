@@ -1,0 +1,24 @@
+print "Hello, world!\n";
+
+class Breakfast {
+  cook() {
+    print "Eggs a-fryin'!";
+  }
+
+  serve(who) {
+    print "Enjoy your breakfast, " + who + ".";
+  }
+}
+
+fun main(a, b) {
+    var c = 3;
+    var d = 4;
+    var e = a + b + c + d + 1;
+    print e;
+    var bf = Breakfast();
+    for (var i = 0; i < e; i = i + 1) {
+        bf.serve("bob" + i);
+    }
+    return e;
+
+}
