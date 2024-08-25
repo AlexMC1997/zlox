@@ -7,6 +7,7 @@ const TokenType = @import("token.zig").TokenType;
 const Value = @import("value.zig").Value;
 const parseValue = @import("value.zig").parseValue;
 const StringHashMap = std.StringHashMap;
+const Allocator = std.mem.Allocator;
 
 fn init_key_words(allocator: std.mem.Allocator) !StringHashMap(TokenType) {
     var tmp = StringHashMap(TokenType).init(allocator);
@@ -38,15 +39,16 @@ pub const Scanner = struct {
     read_buf: []u8,
     key_words: StringHashMap(TokenType),
     tokens: std.ArrayList(Token),
+    allocator: Allocator,
 
-    pub fn init(reader: anytype, allocator: std.mem.Allocator) !Self {
-        return .{ .start = 0, .current = 0, .line = 1, .read_buf = try reader.readAllAlloc(allocator, 0x100000), .key_words = try init_key_words(allocator), .tokens = std.ArrayList(Token).init(allocator) };
+    pub fn init(reader: anytype, allocator: Allocator) !Self {
+        return .{ .start = 0, .current = 0, .line = 1, .read_buf = try reader.readAllAlloc(allocator, 0x100000), .key_words = try init_key_words(allocator), .tokens = std.ArrayList(Token).init(allocator), .allocator = allocator };
     }
 
-    pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *Self) void {
         self.key_words.deinit();
         self.tokens.deinit();
-        allocator.free(self.read_buf);
+        self.allocator.free(self.read_buf);
     }
 
     pub fn printTokens(self: Self, writer: anytype) !void {

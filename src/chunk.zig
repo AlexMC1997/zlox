@@ -4,6 +4,7 @@ const OpCode = @import("./zlox.zig").OpCode;
 
 pub const Chunk = struct {
     const Self = @This();
+
     code: std.ArrayList(u8),
     line_numbers: std.ArrayList(usize),
     constants: std.ArrayList(Value),
@@ -16,6 +17,13 @@ pub const Chunk = struct {
         self.code.deinit();
         self.line_numbers.deinit();
         self.constants.deinit();
+        return;
+    }
+
+    pub fn reinit(self: *Self) void {
+        self.code.clearAndFree();
+        self.line_numbers.clearAndFree();
+        self.constants.clearAndFree();
         return;
     }
 

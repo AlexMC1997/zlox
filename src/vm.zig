@@ -6,17 +6,11 @@ const Value = @import("./value.zig").Value;
 pub const VM = struct {
     const Self = @This();
 
-    chunk: *const Chunk,
     ip: usize,
     stack: std.ArrayList(Value),
 
-    pub fn init(chunk: *const Chunk, allocator: std.mem.Allocator) Self {
-        return .{ .ip = 0, .chunk = chunk, .stack = std.ArrayList(Value).init(allocator) };
-    }
-
-    pub fn reinit(self: *Self, allocator: std.mem.Allocator) void {
-        self.deinit();
-        self.* = Self.init(allocator);
+    pub fn init(allocator: std.mem.Allocator) Self {
+        return .{ .ip = 0, .stack = std.ArrayList(Value).init(allocator) };
     }
 
     pub fn deinit(self: Self) void {
@@ -31,19 +25,19 @@ pub const VM = struct {
         try writer.print("\n", .{});
     }
 
-    pub fn run(self: *Self, trace_writer: anytype) !void {
-        var instr: OpCode = self.chunk.getInstr(self.ip);
-        while (true) : (instr = self.chunk.getInstr(self.ip)) {
+    pub fn run(self: *Self, chunk: *const Chunk, trace_writer: anytype) !void {
+        var instr: OpCode = chunk.getInstr(self.ip);
+        while (true) : (instr = chunk.getInstr(self.ip)) {
             try self.printStack(trace_writer);
-            _ = try self.chunk.disassembleInstr(self.ip, trace_writer);
+            _ = try chunk.disassembleInstr(self.ip, trace_writer);
             switch (instr) {
                 .OP_CONSTANT => {
-                    const val: Value = self.chunk.getConstant(self.ip + 1);
+                    const val: Value = chunk.getConstant(self.ip + 1);
                     try self.stack.append(val);
                     self.ip += 2;
                 },
                 .OP_CONSTANT_LONG => {
-                    const val: Value = self.chunk.getConstantLong(self.ip + 1);
+                    const val: Value = chunk.getConstantLong(self.ip + 1);
                     try self.stack.append(val);
                     self.ip += 4;
                 },
@@ -83,10 +77,9 @@ pub const VM = struct {
         }
     }
 
-    pub fn interpret(self: *Self, chunk: *const Chunk) !void {
-        self.chunk = chunk;
+    pub fn interpret(self: *Self, chunk: *const Chunk, trace_writer: anytype) !void {
         self.ip = 0;
         self.stack.clearAndFree();
-        try self.run();
+        try self.run(chunk, trace_writer);
     }
 };

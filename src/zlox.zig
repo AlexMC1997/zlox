@@ -21,18 +21,20 @@ pub fn runFile(path: []const u8, writer: anytype, allocator: Allocator) !void {
     const file: std.fs.File = std.fs.cwd().openFile(path, .{}) catch try std.fs.openFileAbsolute(path, .{});
 
     var scanner = try Scanner.init(file.reader(), allocator);
-    defer scanner.deinit(allocator);
+    defer scanner.deinit();
+
+    var parser = Parser.init(allocator);
+    defer parser.deinit();
+
+    var vm = VM.init(allocator);
+    defer vm.deinit();
 
     try scanner.scan();
     try scanner.printTokens(writer);
 
-    var parser = Parser.init(&scanner, allocator);
-    try parser.parse();
+    try parser.parse(&scanner);
 
     // try parser.chunk.disassemble("Test Prog", std.io.getStdOut().writer());
 
-    var vm = VM.init(&parser.chunk, allocator);
-    defer vm.deinit();
-
-    try vm.run(writer);
+    try vm.interpret(&parser.chunk, writer);
 }
