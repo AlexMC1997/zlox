@@ -6,23 +6,24 @@ pub const Chunk = struct {
     const Self = @This();
 
     code: std.ArrayList(u8),
-    line_numbers: std.ArrayList(usize),
+    lint_numbers: std.ArrayList(usize),
     constants: std.ArrayList(Value),
+    static_alloc: std.heap.ArenaAllocator,
 
     pub fn init(allocator: std.mem.Allocator) Self {
-        return Self{ .code = std.ArrayList(u8).init(allocator), .constants = std.ArrayList(Value).init(allocator), .line_numbers = std.ArrayList(usize).init(allocator) };
+        return Self{ .code = std.ArrayList(u8).init(allocator), .constants = std.ArrayList(Value).init(allocator), .lint_numbers = std.ArrayList(usize).init(allocator), .static_alloc = std.heap.ArenaAllocator.init(allocator) };
     }
 
     pub fn deinit(self: Self) void {
         self.code.deinit();
-        self.line_numbers.deinit();
+        self.lint_numbers.deinit();
         self.constants.deinit();
         return;
     }
 
     pub fn reinit(self: *Self) void {
         self.code.clearAndFree();
-        self.line_numbers.clearAndFree();
+        self.lint_numbers.clearAndFree();
         self.constants.clearAndFree();
         return;
     }
@@ -33,19 +34,19 @@ pub const Chunk = struct {
 
     pub fn write(self: *Self, byte: u8, line: usize) !void {
         try self.code.append(byte);
-        if (self.line_numbers.items.len == line) {
-            self.line_numbers.items[line - 1] += 1;
+        if (self.lint_numbers.items.len == line) {
+            self.lint_numbers.items[line - 1] += 1;
         } else {
-            try self.line_numbers.append(1);
+            try self.lint_numbers.append(1);
         }
         return;
     }
 
     pub fn getLine(self: Self, offset: usize) usize {
-        var i: usize = self.line_numbers.items[0];
+        var i: usize = self.lint_numbers.items[0];
         var line: usize = 1;
         while (i <= offset) : (line += 1) {
-            i += self.line_numbers.items[line];
+            i += self.lint_numbers.items[line];
         }
         return line;
     }

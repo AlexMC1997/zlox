@@ -5,6 +5,8 @@ const Chunk = @import("chunk.zig").Chunk;
 const Token = @import("token.zig").Token;
 const TokenType = @import("token.zig").TokenType;
 const Value = @import("value.zig").Value;
+const Object = @import("object.zig").Object;
+const String = @import("string.zig").String;
 const StringHashMap = std.StringHashMap;
 const Allocator = std.mem.Allocator;
 
@@ -62,13 +64,14 @@ pub const Scanner = struct {
         return self.tokens.items[index];
     }
 
-    pub fn getValue(self: Self, token: Token) !Value {
+    pub fn getValue(self: Self, token: Token, allocator: anytype) !Value {
         return switch (token.tok_type) {
             TokenType.TOKEN_NUMBER => Value.parseNumber(self.read_buf[token.start..(token.start + token.len)]),
-            TokenType.TOKEN_TRUE => .{ .e_boolean = true },
-            TokenType.TOKEN_FALSE => .{ .e_boolean = false },
-            TokenType.TOKEN_NIL => .{ .e_nil = undefined },
-            else => .{ .e_nil = undefined },
+            TokenType.TOKEN_TRUE => .{ .t_boolean = true },
+            TokenType.TOKEN_FALSE => .{ .t_boolean = false },
+            TokenType.TOKEN_NIL => .{ .t_nil = undefined },
+            TokenType.TOKEN_STRING => .{ .t_obj = @ptrCast(try String.new(self.read_buf[token.start..(token.start + token.len)], allocator)) },
+            else => .{ .t_nil = undefined },
         };
     }
 
@@ -123,6 +126,7 @@ pub const Scanner = struct {
         if (self.current == self.read_buf.len) {
             return error.INTERPRET_LEXICAL_ERROR;
         }
+        self.start += 1;
         const tok = self.makeToken(.TOKEN_STRING);
         self.current += 1;
         return tok;

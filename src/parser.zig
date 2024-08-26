@@ -71,7 +71,7 @@ pub const Parser = struct {
     }
 
     fn value(self: *Self, tok: TokenType) !void {
-        const val = try self.scanner.?.getValue(self.current);
+        const val = try self.scanner.?.getValue(self.current, self.chunk.static_alloc.allocator());
         try self.emitConstant(val, self.current.line);
         try self.consume(tok);
     }
@@ -131,6 +131,7 @@ pub const Parser = struct {
                 .TOKEN_QUESTION => try self.ternary(),
                 .TOKEN_LEFT_PAREN => try self.grouping(),
                 .TOKEN_NUMBER => try self.value(.TOKEN_NUMBER),
+                .TOKEN_STRING => try self.value(.TOKEN_STRING),
                 .TOKEN_TRUE => try self.value(.TOKEN_TRUE),
                 .TOKEN_FALSE => try self.value(.TOKEN_FALSE),
                 .TOKEN_NIL => try self.value(.TOKEN_NIL),
