@@ -5,7 +5,6 @@ const Chunk = @import("chunk.zig").Chunk;
 const Token = @import("token.zig").Token;
 const TokenType = @import("token.zig").TokenType;
 const Value = @import("value.zig").Value;
-const parseValue = @import("value.zig").parseValue;
 const StringHashMap = std.StringHashMap;
 const Allocator = std.mem.Allocator;
 
@@ -56,7 +55,6 @@ pub const Scanner = struct {
     }
 
     pub fn makeToken(self: *Self, token_type: TokenType) Token {
-        self.current += 1;
         return Token{ .tok_type = token_type, .start = self.start, .line = self.line, .len = (self.current - self.start) };
     }
 
@@ -65,13 +63,19 @@ pub const Scanner = struct {
     }
 
     pub fn getValue(self: Self, token: Token) !Value {
-        return parseValue(self.read_buf[token.start..(token.start + token.len)]);
+        return switch (token.tok_type) {
+            TokenType.TOKEN_NUMBER => Value.parseNumber(self.read_buf[token.start..(token.start + token.len)]),
+            TokenType.TOKEN_TRUE => .{ .e_boolean = true },
+            TokenType.TOKEN_FALSE => .{ .e_boolean = false },
+            TokenType.TOKEN_NIL => .{ .e_nil = undefined },
+            else => .{ .e_nil = undefined },
+        };
     }
 
     pub fn next(self: *Self, c: u8) bool {
-        if (self.current + 1 == self.read_buf.len) {
+        if (self.current == self.read_buf.len) {
             return false;
-        } else if (self.read_buf[self.current + 1] != c) {
+        } else if (self.read_buf[self.current] != c) {
             return false;
         } else {
             self.current += 1;
@@ -111,7 +115,6 @@ pub const Scanner = struct {
     }
 
     pub fn scanString(self: *Self) InterpretError!Token {
-        self.current += 1;
         while (self.current < self.read_buf.len and self.read_buf[self.current] != '"') : (self.current += 1) {
             if (self.read_buf[self.current] == '\n') {
                 self.line += 1;
@@ -120,7 +123,9 @@ pub const Scanner = struct {
         if (self.current == self.read_buf.len) {
             return error.INTERPRET_LEXICAL_ERROR;
         }
-        return self.makeToken(.TOKEN_STRING);
+        const tok = self.makeToken(.TOKEN_STRING);
+        self.current += 1;
+        return tok;
     }
 
     pub fn scanID(self: *Self) Token {
@@ -128,21 +133,18 @@ pub const Scanner = struct {
             'A'...'Z', 'a'...'z', '0'...'9', '_' => true,
             else => false,
         }) : (self.current += 1) {}
-        return self.makeToken(self.key_words.get(self.read_buf[self.start..self.current]) orelse {
-            self.current -= 1;
-            return self.makeToken(.TOKEN_IDENTIFIER);
-        });
+        return self.makeToken(self.key_words.get(self.read_buf[self.start..self.current]) orelse return self.makeToken(.TOKEN_IDENTIFIER));
     }
 
     pub fn scanNumber(self: *Self) Token {
-        while (self.current + 1 < self.read_buf.len and switch (self.read_buf[self.current + 1]) {
+        while (self.current < self.read_buf.len and switch (self.read_buf[self.current]) {
             '0'...'9' => true,
             else => false,
         }) : (self.current += 1) {}
 
-        if (self.current + 1 < self.read_buf.len and self.read_buf[self.current] == '.') {
+        if (self.current < self.read_buf.len and self.read_buf[self.current] == '.') {
             self.current += 1;
-            while (self.current < self.read_buf.len and switch (self.read_buf[self.current + 1]) {
+            while (self.current < self.read_buf.len and switch (self.read_buf[self.current]) {
                 '0'...'9' => true,
                 else => false,
             }) : (self.current += 1) {}
@@ -160,6 +162,7 @@ pub const Scanner = struct {
 
     pub fn scanToken(self: *Self) !Token {
         if (self.current == self.read_buf.len) {
+            self.current += 1;
             return self.makeToken(.TOKEN_EOF);
         }
 
@@ -168,8 +171,8 @@ pub const Scanner = struct {
             return self.makeToken(.TOKEN_EOF);
         }
         self.start = self.current;
-
-        return switch (self.read_buf[self.current]) {
+        self.current += 1;
+        return switch (self.read_buf[self.start]) {
             '(' => self.makeToken(.TOKEN_LEFT_PAREN),
             ')' => self.makeToken(.TOKEN_RIGHT_PAREN),
             '{' => self.makeToken(.TOKEN_LEFT_BRACE),

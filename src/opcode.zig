@@ -6,5 +6,13 @@ pub const OpCode = enum(u8) {
     OP_SUBTRACT,
     OP_MULTIPLY,
     OP_DIVIDE,
+    OP_NOT,
+    OP_OR,
+    OP_AND,
+    OP_EQ,
+    OP_GEQ,
+    OP_LEQ,
+    OP_LT,
+    OP_GT,
     OP_RETURN,
 };

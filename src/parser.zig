@@ -70,10 +70,10 @@ pub const Parser = struct {
         self.token_number += 1;
     }
 
-    fn number(self: *Self) !void {
+    fn value(self: *Self, tok: TokenType) !void {
         const val = try self.scanner.?.getValue(self.current);
         try self.emitConstant(val, self.current.line);
-        try self.consume(.TOKEN_NUMBER);
+        try self.consume(tok);
     }
 
     fn consume(self: *Self, tok_type: TokenType) !void {
@@ -91,30 +91,30 @@ pub const Parser = struct {
         try self.consume(.TOKEN_RIGHT_PAREN);
     }
 
-    fn stack_op(self: *Self, prec: u8, op: OpCode, tok: TokenType) !void {
+    fn stackOp(self: *Self, prec: u8, op: OpCode, tok: TokenType) !void {
         try self.consume(tok);
         try self.expression(prec);
         try self.emitCode(op, self.current.line);
     }
 
     fn add(self: *Self) !void {
-        try self.stack_op(PREC_TERM, .OP_ADD, .TOKEN_PLUS);
+        try self.stackOp(PREC_TERM, .OP_ADD, .TOKEN_PLUS);
     }
 
     fn negate(self: *Self) !void {
-        try self.stack_op(PREC_UNARY, .OP_NEGATE, .TOKEN_MINUS);
+        try self.stackOp(PREC_UNARY, .OP_NEGATE, .TOKEN_MINUS);
     }
 
     fn subtract(self: *Self) !void {
-        try self.stack_op(PREC_TERM, .OP_SUBTRACT, .TOKEN_MINUS);
+        try self.stackOp(PREC_TERM, .OP_SUBTRACT, .TOKEN_MINUS);
     }
 
     fn multiply(self: *Self) !void {
-        try self.stack_op(PREC_FACTOR, .OP_MULTIPLY, .TOKEN_STAR);
+        try self.stackOp(PREC_FACTOR, .OP_MULTIPLY, .TOKEN_STAR);
     }
 
     fn divide(self: *Self) !void {
-        try self.stack_op(PREC_FACTOR, .OP_DIVIDE, .TOKEN_SLASH);
+        try self.stackOp(PREC_FACTOR, .OP_DIVIDE, .TOKEN_SLASH);
     }
 
     fn ternary(self: *Self) !void {
@@ -130,11 +130,22 @@ pub const Parser = struct {
             switch (self.current.tok_type) {
                 .TOKEN_QUESTION => try self.ternary(),
                 .TOKEN_LEFT_PAREN => try self.grouping(),
-                .TOKEN_NUMBER => try self.number(),
+                .TOKEN_NUMBER => try self.value(.TOKEN_NUMBER),
+                .TOKEN_TRUE => try self.value(.TOKEN_TRUE),
+                .TOKEN_FALSE => try self.value(.TOKEN_FALSE),
+                .TOKEN_NIL => try self.value(.TOKEN_NIL),
                 .TOKEN_PLUS => if (prec < PREC_TERM) try self.add() else return,
                 .TOKEN_MINUS => if (prec < PREC_TERM) try self.subtract() else if (prec < PREC_UNARY) try self.negate() else return,
+                .TOKEN_BANG => if (prec < PREC_UNARY) try self.stackOp(PREC_UNARY, .OP_NOT, .TOKEN_BANG),
                 .TOKEN_STAR => if (prec < PREC_FACTOR) try self.multiply() else return,
                 .TOKEN_SLASH => if (prec < PREC_FACTOR) try self.divide() else return,
+                .TOKEN_GREATER_EQUAL => if (prec < PREC_COMPARISON) try self.stackOp(PREC_COMPARISON, .OP_GEQ, .TOKEN_GREATER_EQUAL) else return,
+                .TOKEN_LESS_EQUAL => if (prec < PREC_COMPARISON) try self.stackOp(PREC_COMPARISON, .OP_LEQ, .TOKEN_LESS_EQUAL) else return,
+                .TOKEN_LESS => if (prec < PREC_COMPARISON) try self.stackOp(PREC_COMPARISON, .OP_LT, .TOKEN_LESS) else return,
+                .TOKEN_GREATER => if (prec < PREC_COMPARISON) try self.stackOp(PREC_COMPARISON, .OP_GT, .TOKEN_GREATER) else return,
+                .TOKEN_EQUAL_EQUAL => if (prec < PREC_EQUALITY) try self.stackOp(PREC_EQUALITY, .OP_EQ, .TOKEN_EQUAL_EQUAL) else return,
+                .TOKEN_AND => if (prec < PREC_AND) try self.stackOp(PREC_AND, .OP_AND, .TOKEN_AND) else return,
+                .TOKEN_OR => if (prec < PREC_OR) try self.stackOp(PREC_OR, .OP_OR, .TOKEN_OR) else return,
                 // .TOKEN_SEMICOLON => return std.debug.print("Reached end of statement.\n", .{}),
                 // .TOKEN_EOF => return std.debug.print("Reached end of file.\n", .{}),
                 else => return,
