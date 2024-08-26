@@ -18,7 +18,7 @@ const expectEqual = std.testing.expectEqual;
 fn expectValue(comptime vtype: ValueType, value: Value, expected: anytype) !void {
     return switch (value) {
         vtype => |val| try expect(val == expected),
-        else => expectEqual(@tagName(value), @tagName(vtype)),
+        else => expectEqual(std.meta.activeTag(value), vtype),
     };
 }
 

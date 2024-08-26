@@ -31,6 +31,20 @@ pub const VM = struct {
         try writer.print("\n", .{});
     }
 
+    fn Unpack(comptime valType: ValueType) type {
+        return struct {
+            pub fn get(val: Value, op: OpCode, trace_writer: anytype, line: usize) !@TypeOf(@field(val, @tagName(valType))) {
+                return switch (val) {
+                    valType => @field(val, @tagName(valType)),
+                    else => {
+                        try logError(trace_writer, line, op, val);
+                        return InterpretError.INTERPRET_RUNTIME_ERROR;
+                    },
+                };
+            }
+        };
+    }
+
     pub fn run(self: *Self, chunk: *const Chunk, trace_writer: anytype) !void {
         var instr: OpCode = chunk.getInstr(self.ip);
         while (true) : (instr = chunk.getInstr(self.ip)) {
@@ -48,132 +62,48 @@ pub const VM = struct {
                     self.ip += 4;
                 },
                 .OP_NEGATE => {
-                    switch (self.stack.getLast()) {
-                        ValueType.e_number => try self.stack.append(.{ .e_number = -self.stack.pop().e_number }),
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_NEGATE, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    }
-
+                    const v = try Unpack(.e_number).get(self.stack.pop(), .OP_NEGATE, trace_writer, chunk.getLine(self.ip));
+                    try self.stack.append(.{ .e_number = -v });
                     self.ip += 1;
                 },
                 .OP_ADD => {
-                    const v2: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_ADD, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
-                    const v1: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_ADD, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
+                    const v2 = try Unpack(.e_number).get(self.stack.pop(), .OP_ADD, trace_writer, chunk.getLine(self.ip));
+                    const v1 = try Unpack(.e_number).get(self.stack.pop(), .OP_ADD, trace_writer, chunk.getLine(self.ip));
                     try self.stack.append(.{ .e_number = v1 + v2 });
                     self.ip += 1;
                 },
                 .OP_SUBTRACT => {
-                    const v2: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_SUBTRACT, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
-                    const v1: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_SUBTRACT, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
+                    const v2 = try Unpack(.e_number).get(self.stack.pop(), .OP_SUBTRACT, trace_writer, chunk.getLine(self.ip));
+                    const v1 = try Unpack(.e_number).get(self.stack.pop(), .OP_SUBTRACT, trace_writer, chunk.getLine(self.ip));
                     try self.stack.append(.{ .e_number = v1 - v2 });
                     self.ip += 1;
                 },
                 .OP_MULTIPLY => {
-                    const v2: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_MULTIPLY, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
-                    const v1: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_MULTIPLY, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
+                    const v2 = try Unpack(.e_number).get(self.stack.pop(), .OP_MULTIPLY, trace_writer, chunk.getLine(self.ip));
+                    const v1 = try Unpack(.e_number).get(self.stack.pop(), .OP_MULTIPLY, trace_writer, chunk.getLine(self.ip));
                     try self.stack.append(.{ .e_number = v1 * v2 });
                     self.ip += 1;
                 },
                 .OP_DIVIDE => {
-                    const v2: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_DIVIDE, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
-                    const v1: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_DIVIDE, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
+                    const v2 = try Unpack(.e_number).get(self.stack.pop(), .OP_DIVIDE, trace_writer, chunk.getLine(self.ip));
+                    const v1 = try Unpack(.e_number).get(self.stack.pop(), .OP_DIVIDE, trace_writer, chunk.getLine(self.ip));
                     try self.stack.append(.{ .e_number = v1 / v2 });
                     self.ip += 1;
                 },
                 .OP_NOT => {
-                    switch (self.stack.getLast()) {
-                        ValueType.e_boolean => try self.stack.append(.{ .e_boolean = !self.stack.pop().e_boolean }),
-                        ValueType.e_number, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_NOT, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    }
-
+                    const v = try Unpack(.e_boolean).get(self.stack.pop(), .OP_NOT, trace_writer, chunk.getLine(self.ip));
+                    try self.stack.append(.{ .e_boolean = !v });
                     self.ip += 1;
                 },
                 .OP_OR => {
-                    const v2: Value.BoolType = switch (self.stack.getLast()) {
-                        ValueType.e_boolean => self.stack.pop().e_boolean,
-                        ValueType.e_number, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_OR, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
-                    const v1: Value.BoolType = switch (self.stack.getLast()) {
-                        ValueType.e_boolean => self.stack.pop().e_boolean,
-                        ValueType.e_number, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_OR, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
+                    const v2 = try Unpack(.e_boolean).get(self.stack.pop(), .OP_OR, trace_writer, chunk.getLine(self.ip));
+                    const v1 = try Unpack(.e_boolean).get(self.stack.pop(), .OP_OR, trace_writer, chunk.getLine(self.ip));
                     try self.stack.append(.{ .e_boolean = v1 or v2 });
                     self.ip += 1;
                 },
                 .OP_AND => {
-                    const v2: Value.BoolType = switch (self.stack.getLast()) {
-                        ValueType.e_boolean => self.stack.pop().e_boolean,
-                        ValueType.e_number, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_AND, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
-                    const v1: Value.BoolType = switch (self.stack.getLast()) {
-                        ValueType.e_boolean => self.stack.pop().e_boolean,
-                        ValueType.e_number, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_AND, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
+                    const v2 = try Unpack(.e_boolean).get(self.stack.pop(), .OP_AND, trace_writer, chunk.getLine(self.ip));
+                    const v1 = try Unpack(.e_boolean).get(self.stack.pop(), .OP_AND, trace_writer, chunk.getLine(self.ip));
                     try self.stack.append(.{ .e_boolean = v1 and v2 });
                     self.ip += 1;
                 },
@@ -184,74 +114,26 @@ pub const VM = struct {
                     self.ip += 1;
                 },
                 .OP_GEQ => {
-                    const v2: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_GEQ, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
-                    const v1: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_GEQ, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
+                    const v2 = try Unpack(.e_number).get(self.stack.pop(), .OP_GEQ, trace_writer, chunk.getLine(self.ip));
+                    const v1 = try Unpack(.e_number).get(self.stack.pop(), .OP_GEQ, trace_writer, chunk.getLine(self.ip));
                     try self.stack.append(.{ .e_boolean = v1 >= v2 });
                     self.ip += 1;
                 },
                 .OP_LEQ => {
-                    const v2: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_LEQ, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
-                    const v1: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_LEQ, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
+                    const v2 = try Unpack(.e_number).get(self.stack.pop(), .OP_LEQ, trace_writer, chunk.getLine(self.ip));
+                    const v1 = try Unpack(.e_number).get(self.stack.pop(), .OP_LEQ, trace_writer, chunk.getLine(self.ip));
                     try self.stack.append(.{ .e_boolean = v1 <= v2 });
                     self.ip += 1;
                 },
                 .OP_LT => {
-                    const v2: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_LT, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
-                    const v1: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_LT, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
+                    const v2 = try Unpack(.e_number).get(self.stack.pop(), .OP_LT, trace_writer, chunk.getLine(self.ip));
+                    const v1 = try Unpack(.e_number).get(self.stack.pop(), .OP_LT, trace_writer, chunk.getLine(self.ip));
                     try self.stack.append(.{ .e_boolean = v1 < v2 });
                     self.ip += 1;
                 },
                 .OP_GT => {
-                    const v2: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_GT, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
-                    const v1: Value.NumberType = switch (self.stack.getLast()) {
-                        ValueType.e_number => self.stack.pop().e_number,
-                        ValueType.e_boolean, ValueType.e_nil => {
-                            try logError(trace_writer, chunk.getLine(self.ip), .OP_GT, self.stack.getLast());
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        },
-                    };
+                    const v2 = try Unpack(.e_number).get(self.stack.pop(), .OP_GT, trace_writer, chunk.getLine(self.ip));
+                    const v1 = try Unpack(.e_number).get(self.stack.pop(), .OP_GT, trace_writer, chunk.getLine(self.ip));
                     try self.stack.append(.{ .e_boolean = v1 > v2 });
                     self.ip += 1;
                 },
