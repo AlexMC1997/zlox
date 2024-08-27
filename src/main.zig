@@ -42,7 +42,7 @@ test "arithmetic" {
     try chunk.writeConstant(.{ .t_number = 3.0 }, 1);
     try chunk.writeOpCode(.OP_ADD, 1);
     try chunk.writeOpCode(.OP_RETURN, 2);
-    try vm.interpret(&chunk, writer);
+    try vm.interpret(&chunk, writer, true);
     try expectValue(ValueType.t_number, vm.stack.getLast(), 5);
 
     chunk.reinit();
@@ -53,7 +53,7 @@ test "arithmetic" {
     try chunk.writeConstant(.{ .t_number = 1.0 }, 1);
     try chunk.writeOpCode(.OP_ADD, 1);
     try chunk.writeOpCode(.OP_RETURN, 2);
-    try vm.interpret(&chunk, writer);
+    try vm.interpret(&chunk, writer, true);
     try expectValue(ValueType.t_number, vm.stack.getLast(), 7);
 
     chunk.reinit();
@@ -64,7 +64,7 @@ test "arithmetic" {
     try chunk.writeConstant(.{ .t_number = 3.0 }, 1);
     try chunk.writeOpCode(.OP_SUBTRACT, 1);
     try chunk.writeOpCode(.OP_RETURN, 2);
-    try vm.interpret(&chunk, writer);
+    try vm.interpret(&chunk, writer, true);
     try expectValue(ValueType.t_number, vm.stack.getLast(), 0);
 
     chunk.reinit();
@@ -80,7 +80,7 @@ test "arithmetic" {
     try chunk.writeConstant(.{ .t_number = 1.0 }, 1);
     try chunk.writeOpCode(.OP_ADD, 1);
     try chunk.writeOpCode(.OP_RETURN, 2);
-    try vm.interpret(&chunk, writer);
+    try vm.interpret(&chunk, writer, true);
     try expectValue(ValueType.t_number, vm.stack.getLast(), 39.0 / 5.0);
 }
 
@@ -102,7 +102,7 @@ test "type error" {
     try chunk.writeConstant(.{ .t_boolean = true }, 1);
     try chunk.writeOpCode(.OP_ADD, 1);
     try chunk.writeOpCode(.OP_RETURN, 2);
-    const res: anyerror!void = vm.interpret(&chunk, writer);
+    const res: anyerror!void = vm.interpret(&chunk, writer, true);
     try std.testing.expectError(zlox.InterpretError.INTERPRET_RUNTIME_ERROR, res);
 }
 
@@ -130,7 +130,7 @@ test "expression" {
     try parser.parse(&scanner);
     try parser.chunk.disassemble("test_program", writer);
 
-    try vm.interpret(&parser.chunk, writer);
+    try vm.interpret(&parser.chunk, writer, true);
 
     try expectValue(ValueType.t_number, vm.stack.getLast(), (3.0 - -3.4 * 4.0 / -(51 + 2.0)));
 }
@@ -159,7 +159,7 @@ test "logic" {
     try parser.parse(&scanner);
     try parser.chunk.disassemble("test_program", writer);
 
-    try vm.interpret(&parser.chunk, writer);
+    try vm.interpret(&parser.chunk, writer, true);
 
     try expectValue(ValueType.t_boolean, vm.stack.getLast(), !(true and 2 * 2 > 1.5 + 1.5 or false) or 2 * 2 + 2 < 3 + 3 + 3 or (false or 5 == 5));
 }
@@ -188,7 +188,7 @@ test "strings" {
     try parser.parse(&scanner);
     try parser.chunk.disassemble("test_program", writer);
 
-    try vm.interpret(&parser.chunk, writer);
+    try vm.interpret(&parser.chunk, writer, true);
 
     try expectValue(ValueType.t_boolean, vm.stack.getLast(), true);
 }

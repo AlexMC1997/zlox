@@ -11,7 +11,12 @@ pub const Chunk = struct {
     static_alloc: std.heap.ArenaAllocator,
 
     pub fn init(allocator: std.mem.Allocator) Self {
-        return Self{ .code = std.ArrayList(u8).init(allocator), .constants = std.ArrayList(Value).init(allocator), .lint_numbers = std.ArrayList(usize).init(allocator), .static_alloc = std.heap.ArenaAllocator.init(allocator) };
+        return Self { 
+            .code = std.ArrayList(u8).init(allocator), 
+            .constants = std.ArrayList(Value).init(allocator), 
+            .lint_numbers = std.ArrayList(usize).init(allocator), 
+            .static_alloc = std.heap.ArenaAllocator.init(allocator) 
+        };
     }
 
     pub fn deinit(self: Self) void {
@@ -95,79 +100,21 @@ pub const Chunk = struct {
         }
         const instr: OpCode = @enumFromInt(self.code.items[offset]);
         var buf: [256]u8 = undefined;
-        while (true) {
-            switch (instr) {
-                .OP_RETURN => {
-                    try writer.print("OP_RETURN\n", .{});
-                    return offset + 1;
-                },
-                .OP_CONSTANT => {
-                    const constantInd = self.code.items[offset + 1];
-                    try writer.print("OP_CONSTANT {} {s}\n", .{ constantInd, try self.constants.items[constantInd].toString(&buf) });
-                    return offset + 2;
-                },
-                .OP_CONSTANT_LONG => {
-                    const constantInd: usize = @as(usize, self.code.items[offset + 1]) + (@as(usize, self.code.items[offset + 1]) << 8) + (@as(usize, self.code.items[offset + 1]) << 16);
-                    try writer.print("OP_CONSTANT {} {s}\n", .{ constantInd, try self.constants.items[constantInd].toString(&buf) });
-                    return offset + 4;
-                },
-                .OP_NEGATE => {
-                    try writer.print("OP_NEGATE\n", .{});
-                    return offset + 1;
-                },
-                .OP_ADD => {
-                    try writer.print("OP_ADD\n", .{});
-                    return offset + 1;
-                },
-                .OP_SUBTRACT => {
-                    try writer.print("OP_SUBTRACT\n", .{});
-                    return offset + 1;
-                },
-                .OP_MULTIPLY => {
-                    try writer.print("OP_MULTIPLY\n", .{});
-                    return offset + 1;
-                },
-                .OP_DIVIDE => {
-                    try writer.print("OP_DIVIDE\n", .{});
-                    return offset + 1;
-                },
-                .OP_AND => {
-                    try writer.print("OP_AND\n", .{});
-                    return offset + 1;
-                },
-                .OP_OR => {
-                    try writer.print("OP_OR\n", .{});
-                    return offset + 1;
-                },
-                .OP_GEQ => {
-                    try writer.print("OP_GEQ\n", .{});
-                    return offset + 1;
-                },
-                .OP_LEQ => {
-                    try writer.print("OP_LEQ\n", .{});
-                    return offset + 1;
-                },
-                .OP_EQ => {
-                    try writer.print("OP_EQ\n", .{});
-                    return offset + 1;
-                },
-                .OP_GT => {
-                    try writer.print("OP_GT\n", .{});
-                    return offset + 1;
-                },
-                .OP_LT => {
-                    try writer.print("OP_LT\n", .{});
-                    return offset + 1;
-                },
-                .OP_NOT => {
-                    try writer.print("OP_NOT\n", .{});
-                    return offset + 1;
-                },
-                // else => {
-                //     std.debug.print("Unknown opcode {}\n", .{instr});
-                //     return offset + 1;
-                // },
-            }
+        switch (instr) {
+            .OP_CONSTANT => {
+                const constantInd = self.code.items[offset + 1];
+                try writer.print("OP_CONSTANT {} {s}\n", .{ constantInd, try self.constants.items[constantInd].toString(&buf) });
+                return offset + 2;
+            },
+            .OP_CONSTANT_LONG => {
+                const constantInd: usize = @as(usize, self.code.items[offset + 1]) + (@as(usize, self.code.items[offset + 1]) << 8) + (@as(usize, self.code.items[offset + 1]) << 16);
+                try writer.print("OP_CONSTANT {} {s}\n", .{ constantInd, try self.constants.items[constantInd].toString(&buf) });
+                return offset + 4;
+            },
+            else => {
+                try writer.print("{s}\n", .{@tagName(instr)});
+                return offset + 1;
+            },
         }
     }
 

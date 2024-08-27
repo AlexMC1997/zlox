@@ -16,9 +16,10 @@ pub fn VM(comptime TraceWriter: type) type {
         heap_alloc: std.mem.Allocator,
         chunk: ?*const Chunk,
         trace_writer: ?TraceWriter,
+        debug: bool,
 
         pub fn init(allocator: std.mem.Allocator) Self {
-            return .{ .ip = 0, .stack = std.ArrayList(Value).init(allocator), .heap_alloc = allocator, .chunk = null, .trace_writer = null };
+            return .{ .ip = 0, .stack = std.ArrayList(Value).init(allocator), .heap_alloc = allocator, .chunk = null, .trace_writer = null, .debug = false };
         }
 
         pub fn deinit(self: Self) void {
@@ -49,132 +50,162 @@ pub fn VM(comptime TraceWriter: type) type {
             };
         }
 
+        fn opConstant(self: *Self) !void {
+            const val: Value = self.chunk.?.getConstant(self.ip + 1);
+            try self.stack.append(val);
+            self.ip += 2;
+        }
+
+        fn opConstantLong(self: *Self) !void {
+            const val: Value = self.chunk.?.getConstantLong(self.ip + 1);
+            try self.stack.append(val);
+            self.ip += 4;
+        }
+
+        fn opNegate(self: *Self) !void {
+            const v = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_NEGATE);
+            try self.stack.append(.{ .t_number = -v });
+            self.ip += 1;
+        }
+
+        fn opAdd(self: *Self) !void {
+            const v2 = self.stack.pop();
+            const v1 = self.stack.pop();
+            if (std.meta.activeTag(v1) != std.meta.activeTag(v2)) {
+                try self.logTypeError(.OP_ADD, v1, v2);
+                return InterpretError.INTERPRET_RUNTIME_ERROR;
+            }
+            switch (v1) {
+                .t_number => try self.stack.append(.{ .t_number = v1.t_number + v2.t_number }),
+                .t_obj => try self.stack.append(
+                    .{.t_obj = try Object.opAdd(v1.t_obj, v2.t_obj, self.heap_alloc)}
+                ),
+                else => try self.logTypeError( .OP_ADD, v1, v2),
+            }
+            
+            self.ip += 1;
+        }
+
+        fn opSubtract(self: *Self) !void {
+            const v2 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_SUBTRACT);
+            const v1 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_SUBTRACT);
+            try self.stack.append(.{ .t_number = v1 - v2 });
+            self.ip += 1;
+        }
+
+        fn opMultiply(self: *Self) !void {
+            const v2 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_MULTIPLY);
+            const v1 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_MULTIPLY);
+            try self.stack.append(.{ .t_number = v1 * v2 });
+            self.ip += 1;
+        }
+
+        fn opDivide(self: *Self) !void {
+            const v2 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_DIVIDE);
+            const v1 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_DIVIDE);
+            try self.stack.append(.{ .t_number = v1 / v2 });
+            self.ip += 1;
+        }
+
+        fn opNot(self: *Self) !void {
+            const v = try Unpack(.t_boolean)
+                .get(self, self.stack.pop(), .OP_NOT);
+            try self.stack.append(.{ .t_boolean = !v });
+            self.ip += 1;
+        }
+
+        fn opOr(self: *Self) !void {
+            const v2 = try Unpack(.t_boolean)
+                .get(self, self.stack.pop(), .OP_OR);
+            const v1 = try Unpack(.t_boolean)
+                .get(self, self.stack.pop(), .OP_OR);
+            try self.stack.append(.{ .t_boolean = v1 or v2 });
+            self.ip += 1;
+        }
+
+        fn opAnd(self: *Self) !void {
+            const v2 = try Unpack(.t_boolean)
+                .get(self, self.stack.pop(), .OP_AND);
+            const v1 = try Unpack(.t_boolean)
+                .get(self, self.stack.pop(), .OP_AND);
+            try self.stack.append(.{ .t_boolean = v1 and v2 });
+            self.ip += 1;
+        }
+
+        fn opEq(self: *Self) !void {
+            const v2: Value = self.stack.pop();
+            const v1: Value = self.stack.pop();
+            try self.stack.append(.{ .t_boolean = v1.eq(v2) });
+            self.ip += 1;
+        }
+
+        fn opGeq(self: *Self) !void {
+            const v2 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_GEQ);
+            const v1 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_GEQ);
+            try self.stack.append(.{ .t_boolean = v1 >= v2 });
+            self.ip += 1;
+        }
+
+        fn opLeq(self: *Self) !void {
+            const v2 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_LEQ);
+            const v1 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_LEQ);
+            try self.stack.append(.{ .t_boolean = v1 <= v2 });
+            self.ip += 1;
+        }
+
+        fn opLt(self: *Self) !void {
+            const v2 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_LT);
+            const v1 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_LT);
+            try self.stack.append(.{ .t_boolean = v1 < v2 });
+            self.ip += 1;
+        }
+
+        fn opGt(self: *Self) !void {
+            const v2 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_GT);
+            const v1 = try Unpack(.t_number)
+                .get(self, self.stack.pop(), .OP_GT);
+            try self.stack.append(.{ .t_boolean = v1 > v2 });
+            self.ip += 1;
+        }
+
         pub fn run(self: *Self) !void {
             var instr: OpCode = self.chunk.?.getInstr(self.ip);
             while (true) : (instr = self.chunk.?.getInstr(self.ip)) {
-                try self.printStack();
-                _ = try self.chunk.?.disassembleInstr(self.ip, self.trace_writer.?);
+                if (self.debug) {
+                    try self.printStack();
+                    _ = try self.chunk.?.disassembleInstr(self.ip, self.trace_writer.?);
+                }
                 switch (instr) {
-                    .OP_CONSTANT => {
-                        const val: Value = self.chunk.?.getConstant(self.ip + 1);
-                        try self.stack.append(val);
-                        self.ip += 2;
-                    },
-                    .OP_CONSTANT_LONG => {
-                        const val: Value = self.chunk.?.getConstantLong(self.ip + 1);
-                        try self.stack.append(val);
-                        self.ip += 4;
-                    },
-                    .OP_NEGATE => {
-                        const v = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_NEGATE);
-                        try self.stack.append(.{ .t_number = -v });
-                        self.ip += 1;
-                    },
-                    .OP_ADD => {
-                        const v2 = self.stack.pop();
-                        const v1 = self.stack.pop();
-                        if (std.meta.activeTag(v1) != std.meta.activeTag(v2)) {
-                            try self.logTypeError(.OP_ADD, v1, v2);
-                            return InterpretError.INTERPRET_RUNTIME_ERROR;
-                        }
-                        switch (v1) {
-                            .t_number => try self.stack.append(.{ .t_number = v1.t_number + v2.t_number }),
-                            .t_obj => try self.stack.append(
-                                .{.t_obj = try Object.opAdd(v1.t_obj, v2.t_obj, self.heap_alloc)}
-                            ),
-                            else => try self.logTypeError( .OP_ADD, v1, v2),
-                        }
-                        
-                        self.ip += 1;
-                    },
-                    .OP_SUBTRACT => {
-                        const v2 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_SUBTRACT);
-                        const v1 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_SUBTRACT);
-                        try self.stack.append(.{ .t_number = v1 - v2 });
-                        self.ip += 1;
-                    },
-                    .OP_MULTIPLY => {
-                        const v2 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_MULTIPLY);
-                        const v1 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_MULTIPLY);
-                        try self.stack.append(.{ .t_number = v1 * v2 });
-                        self.ip += 1;
-                    },
-                    .OP_DIVIDE => {
-                        const v2 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_DIVIDE);
-                        const v1 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_DIVIDE);
-                        try self.stack.append(.{ .t_number = v1 / v2 });
-                        self.ip += 1;
-                    },
-                    .OP_NOT => {
-                        const v = try Unpack(.t_boolean)
-                            .get(self, self.stack.pop(), .OP_NOT);
-                        try self.stack.append(.{ .t_boolean = !v });
-                        self.ip += 1;
-                    },
-                    .OP_OR => {
-                        const v2 = try Unpack(.t_boolean)
-                            .get(self, self.stack.pop(), .OP_OR);
-                        const v1 = try Unpack(.t_boolean)
-                            .get(self, self.stack.pop(), .OP_OR);
-                        try self.stack.append(.{ .t_boolean = v1 or v2 });
-                        self.ip += 1;
-                    },
-                    .OP_AND => {
-                        const v2 = try Unpack(.t_boolean)
-                            .get(self, self.stack.pop(), .OP_AND);
-                        const v1 = try Unpack(.t_boolean)
-                            .get(self, self.stack.pop(), .OP_AND);
-                        try self.stack.append(.{ .t_boolean = v1 and v2 });
-                        self.ip += 1;
-                    },
-                    .OP_EQ => {
-                        const v2: Value = self.stack.pop();
-                        const v1: Value = self.stack.pop();
-                        try self.stack.append(.{ .t_boolean = v1.eq(v2) });
-                        self.ip += 1;
-                    },
-                    .OP_GEQ => {
-                        const v2 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_GEQ);
-                        const v1 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_GEQ);
-                        try self.stack.append(.{ .t_boolean = v1 >= v2 });
-                        self.ip += 1;
-                    },
-                    .OP_LEQ => {
-                        const v2 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_LEQ);
-                        const v1 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_LEQ);
-                        try self.stack.append(.{ .t_boolean = v1 <= v2 });
-                        self.ip += 1;
-                    },
-                    .OP_LT => {
-                        const v2 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_LT);
-                        const v1 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_LT);
-                        try self.stack.append(.{ .t_boolean = v1 < v2 });
-                        self.ip += 1;
-                    },
-                    .OP_GT => {
-                        const v2 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_GT);
-                        const v1 = try Unpack(.t_number)
-                            .get(self, self.stack.pop(), .OP_GT);
-                        try self.stack.append(.{ .t_boolean = v1 > v2 });
-                        self.ip += 1;
-                    },
-                    .OP_RETURN => {
-                        return;
-                    },
+                    .OP_CONSTANT => try self.opConstant(),
+                    .OP_CONSTANT_LONG => try self.opConstantLong(),
+                    .OP_NEGATE => try self.opNegate(),
+                    .OP_ADD => try self.opAdd(),
+                    .OP_SUBTRACT => try self.opSubtract(),
+                    .OP_MULTIPLY => try self.opMultiply(),
+                    .OP_DIVIDE => try self.opDivide(),
+                    .OP_NOT => try self.opNot(),
+                    .OP_OR => try self.opOr(),
+                    .OP_AND => try self.opAnd(),
+                    .OP_EQ => try self.opEq(),
+                    .OP_GEQ => try self.opGeq(),
+                    .OP_LEQ => try self.opLeq(),
+                    .OP_LT => try self.opLt(),
+                    .OP_GT => try self.opGt(),
+                    .OP_RETURN => return,
                     // else =>
                 }
             }
@@ -204,13 +235,16 @@ pub fn VM(comptime TraceWriter: type) type {
             );
         }
 
-        pub fn interpret(self: *Self, chunk: *const Chunk, trace_writer: TraceWriter) !void {
+        pub fn interpret(self: *Self, chunk: *const Chunk, trace_writer: TraceWriter, debug: bool) !void {
             self.ip = 0;
             self.stack.clearAndFree();
             self.chunk = chunk;
             self.trace_writer = trace_writer;
+            self.debug = debug;
             try self.run();
             self.chunk = null;
+            self.debug = false;
+            self.trace_writer = null;
         }
     };
 } 
