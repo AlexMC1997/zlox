@@ -28,7 +28,7 @@ test "arithmetic" {
 
     const allocator = gpa.allocator();
 
-    var vm = zlox.VM.init(allocator);
+    var vm = zlox.VM(std.fs.File.Writer).init(allocator);
     defer vm.deinit();
 
     const writer = std.io.getStdErr().writer();
@@ -90,7 +90,7 @@ test "type error" {
 
     const allocator = gpa.allocator();
 
-    var vm = zlox.VM.init(allocator);
+    var vm = zlox.VM(std.fs.File.Writer).init(allocator);
     defer vm.deinit();
 
     const writer = std.io.getStdErr().writer();
@@ -121,7 +121,7 @@ test "expression" {
     var parser = zlox.Parser.init(allocator);
     defer parser.deinit();
 
-    var vm = zlox.VM.init(allocator);
+    var vm = zlox.VM(std.fs.File.Writer).init(allocator);
     defer vm.deinit();
 
     try scanner.scan();
@@ -150,7 +150,7 @@ test "logic" {
     var parser = zlox.Parser.init(allocator);
     defer parser.deinit();
 
-    var vm = zlox.VM.init(allocator);
+    var vm = zlox.VM(std.fs.File.Writer).init(allocator);
     defer vm.deinit();
 
     try scanner.scan();
@@ -179,7 +179,7 @@ test "strings" {
     var parser = zlox.Parser.init(allocator);
     defer parser.deinit();
 
-    var vm = zlox.VM.init(allocator);
+    var vm = zlox.VM(std.fs.File.Writer).init(allocator);
     defer vm.deinit();
 
     try scanner.scan();

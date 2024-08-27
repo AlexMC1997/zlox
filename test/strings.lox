@@ -1,1 +1,1 @@
-"hello there" == "hello sir" or "woot" == "woot"
+"hello there" == "hello sir" or "woot" == "woot" and "Alex M." == "Alex" + " " + "M."
