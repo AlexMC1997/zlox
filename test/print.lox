@@ -1,0 +1,7 @@
+print "hello there" == "hello sir" or "woot" == "woot" and "Alex M." == "Alex" + " " + "M.";
+print "\n";
+print "what is up" + " " + "my" + " friend" + "\n";
+print 3 * 3 - 4 + (48.2 / 3);
+print "\n";
+print true and true or false;
+print "\n";

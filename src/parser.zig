@@ -41,15 +41,19 @@ pub const Parser = struct {
 
     pub fn parse(self: *Self, scanner: *const Scanner) !void {
         self.scanner = scanner;
+        self.nextToken();
         while (self.current.tok_type != .TOKEN_EOF) {
-            self.nextToken();
-            self.expression(PREC_ASSIGNMENT) catch |err| {
+            self.declaration() catch |err| {
                 std.debug.print("Syntax error on line {}.\n", .{self.current.line});
                 return err;
             };
         }
         try self.emitCode(.OP_RETURN, self.current.line);
         self.scanner = null;
+    }
+
+    fn tokenData(self: *const Self) []const u8 {
+        return self.scanner.?.read_buf[self.current.start..(self.current.start+self.current.len)];
     }
 
     fn emitConstant(self: *Self, val: Value, line: usize) !void {
@@ -70,10 +74,10 @@ pub const Parser = struct {
         self.token_number += 1;
     }
 
-    fn value(self: *Self, tok: TokenType) !void {
+    fn value(self: *Self) !void {
         const val = try self.scanner.?.getValue(self.current, self.chunk.static_alloc.allocator());
         try self.emitConstant(val, self.current.line);
-        try self.consume(tok);
+        try self.consume(self.current.tok_type);
     }
 
     fn consume(self: *Self, tok_type: TokenType) !void {
@@ -130,11 +134,11 @@ pub const Parser = struct {
             switch (self.current.tok_type) {
                 .TOKEN_QUESTION => try self.ternary(),
                 .TOKEN_LEFT_PAREN => try self.grouping(),
-                .TOKEN_NUMBER => try self.value(.TOKEN_NUMBER),
-                .TOKEN_STRING => try self.value(.TOKEN_STRING),
-                .TOKEN_TRUE => try self.value(.TOKEN_TRUE),
-                .TOKEN_FALSE => try self.value(.TOKEN_FALSE),
-                .TOKEN_NIL => try self.value(.TOKEN_NIL),
+                .TOKEN_NUMBER => try self.value(),
+                .TOKEN_STRING => try self.value(),
+                .TOKEN_TRUE => try self.value(),
+                .TOKEN_FALSE => try self.value(),
+                .TOKEN_NIL => try self.value(),
                 .TOKEN_PLUS => if (prec < PREC_TERM) try self.add() else return,
                 .TOKEN_MINUS => if (prec < PREC_TERM) try self.subtract() else if (prec < PREC_UNARY) try self.negate() else return,
                 .TOKEN_BANG => if (prec < PREC_UNARY) try self.stackOp(PREC_UNARY, .OP_NOT, .TOKEN_BANG),
@@ -152,5 +156,31 @@ pub const Parser = struct {
                 else => return,
             }
         }
+    }
+
+    fn statement(self: *Self) !void {
+        switch (self.current.tok_type) {
+            .TOKEN_PRINT => try self.stackOp(PREC_ASSIGNMENT, .OP_PRINT, .TOKEN_PRINT),
+            else => { try self.expression(PREC_ASSIGNMENT); },
+        }
+    }
+
+    fn variable(self: *Self) !void {
+        try self.value();
+        if (self.current.tok_type != .TOKEN_IDENTIFIER) {
+            return InterpretError.INTERPRET_SYNTAX_ERROR;
+        }
+        try self.consume(.TOKEN_IDENTIFIER);
+        try self.consume(.TOKEN_EQUAL);
+        try self.expression(PREC_ASSIGNMENT);
+    }
+
+    fn declaration(self: *Self) !void {
+        if (self.current.tok_type == .TOKEN_VAR) {
+            try self.variable();
+        } else {
+            try self.statement();
+        }
+        self.consume(.TOKEN_SEMICOLON) catch try self.consume(.TOKEN_EOF);
     }
 };

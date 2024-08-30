@@ -14,5 +14,7 @@ pub const OpCode = enum(u8) {
     OP_LEQ,
     OP_LT,
     OP_GT,
+    OP_PRINT,
+    OP_POP,
     OP_RETURN,
 };

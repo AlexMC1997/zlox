@@ -64,13 +64,36 @@ pub const Scanner = struct {
         return self.tokens.items[index];
     }
 
+    pub fn readStringValue(source: []u8, allocator: Allocator) !*String {
+        var str = try allocator.alloc(u8, source.len);
+        var n: usize = 0;
+        var i: usize = 0;
+        while (i < source.len) : (i += 1) {
+            if (i < source.len and source[i] == '\\') {
+                i += 1;
+                switch (source[i]) {
+                    'n' => str[n] = '\n',
+                    '\\' => str[n] = '\\',
+                    else => return InterpretError.INTERPRET_SYNTAX_ERROR,
+                }
+            } else {
+                str[i] = source[i];
+            }
+            n += 1;
+        }
+        var ret: *String = try String.newEmpty(n, allocator);
+        @memcpy(ret.data, str[0..n]);
+        return ret;
+    }
+
     pub fn getValue(self: Self, token: Token, allocator: anytype) !Value {
         return switch (token.tok_type) {
             TokenType.TOKEN_NUMBER => Value.parseNumber(self.read_buf[token.start..(token.start + token.len)]),
             TokenType.TOKEN_TRUE => .{ .t_boolean = true },
             TokenType.TOKEN_FALSE => .{ .t_boolean = false },
             TokenType.TOKEN_NIL => .{ .t_nil = undefined },
-            TokenType.TOKEN_STRING => .{ .t_obj = @ptrCast(try String.new(self.read_buf[token.start..(token.start + token.len)], allocator)) },
+            TokenType.TOKEN_STRING, TokenType.TOKEN_VAR => 
+                .{ .t_obj = @ptrCast(try readStringValue(self.read_buf[token.start..(token.start + token.len)], allocator)) },
             else => .{ .t_nil = undefined },
         };
     }

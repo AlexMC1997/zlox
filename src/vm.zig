@@ -7,7 +7,7 @@ const Object = @import("object.zig").Object;
 const ObjectType = @import("object.zig").ObjectType;
 const InterpretError = @import("zlox.zig").InterpretError;
 
-pub fn VM(comptime TraceWriter: type) type {
+pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
     return struct {
         const Self = @This();
 
@@ -16,10 +16,11 @@ pub fn VM(comptime TraceWriter: type) type {
         heap_alloc: std.mem.Allocator,
         chunk: ?*const Chunk,
         trace_writer: ?TraceWriter,
+        out: ?OutputWriter,
         debug: bool,
 
         pub fn init(allocator: std.mem.Allocator) Self {
-            return .{ .ip = 0, .stack = std.ArrayList(Value).init(allocator), .heap_alloc = allocator, .chunk = null, .trace_writer = null, .debug = false };
+            return .{ .ip = 0, .stack = std.ArrayList(Value).init(allocator), .heap_alloc = allocator, .chunk = null, .trace_writer = null, .out = null, .debug = false };
         }
 
         pub fn deinit(self: Self) void {
@@ -37,7 +38,7 @@ pub fn VM(comptime TraceWriter: type) type {
 
         fn Unpack(comptime valType: ValueType) type {
             return struct {
-                pub fn get(vm: *const VM(TraceWriter), val: Value, op: OpCode) 
+                pub fn get(vm: *const VM(TraceWriter, OutputWriter), val: Value, op: OpCode) 
                 !@TypeOf(@field(val, @tagName(valType))) {
                     return switch (val) {
                         valType => @field(val, @tagName(valType)),
@@ -182,6 +183,21 @@ pub fn VM(comptime TraceWriter: type) type {
             self.ip += 1;
         }
 
+        fn print(self: *Self) !void {
+            self.ip += 1;
+            if (OutputWriter == void) {
+                return;
+            } else {
+                const v: Value = self.stack.pop();
+                const str: []u8 = switch (v) {
+                    ValueType.t_obj => |obj| try obj.toStringAlloc(self.heap_alloc),
+                    else => try v.toStringAlloc(self.heap_alloc),
+                };
+                defer self.heap_alloc.free(str);
+                try self.out.?.print("{s}", .{str});
+            }
+        }
+
         pub fn run(self: *Self) !void {
             var instr: OpCode = self.chunk.?.getInstr(self.ip);
             while (true) : (instr = self.chunk.?.getInstr(self.ip)) {
@@ -205,6 +221,8 @@ pub fn VM(comptime TraceWriter: type) type {
                     .OP_LEQ => try self.opLeq(),
                     .OP_LT => try self.opLt(),
                     .OP_GT => try self.opGt(),
+                    .OP_PRINT => try self.print(),
+                    .OP_POP => _ = self.stack.pop(),
                     .OP_RETURN => return,
                     // else =>
                 }
@@ -235,16 +253,18 @@ pub fn VM(comptime TraceWriter: type) type {
             );
         }
 
-        pub fn interpret(self: *Self, chunk: *const Chunk, trace_writer: TraceWriter, debug: bool) !void {
+        pub fn interpret(self: *Self, chunk: *const Chunk, trace_writer: TraceWriter, out: ?OutputWriter, debug: bool) !void {
             self.ip = 0;
             self.stack.clearAndFree();
             self.chunk = chunk;
             self.trace_writer = trace_writer;
+            self.out = out;
             self.debug = debug;
             try self.run();
             self.chunk = null;
             self.debug = false;
             self.trace_writer = null;
+            self.out = null;
         }
     };
 } 

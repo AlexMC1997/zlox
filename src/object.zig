@@ -6,9 +6,20 @@ pub const ObjType = enum {
 };
 
 pub const Object = struct {
+    const Self = @This();
     type: ObjType,
 
-    pub fn opAdd(obj1: *const Object, obj2: *const Object, allocator: std.mem.Allocator) !*Object {
+    pub fn Sub(comptime t: ObjType) type {
+        return struct {
+            pub fn from(obj: *const Object) switch (t) {
+                .t_string => *const String,
+            } {
+                return @alignCast(@ptrCast(obj));
+            }
+        };
+    }
+
+    pub fn opAdd(obj1: *const Self, obj2: *const Self, allocator: std.mem.Allocator) !*Object {
         return @alignCast(@ptrCast(switch (obj1.type) {
             .t_string => blk1: {
                 const s1: *const String = @alignCast(@ptrCast(obj1));
@@ -17,4 +28,10 @@ pub const Object = struct {
             },
         }));
     }
-};
+
+    pub fn toStringAlloc(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
+        return switch (self.type) {
+            .t_string => try allocator.dupe(u8, Sub(.t_string).from(self).data),
+        };
+    }
+ };
