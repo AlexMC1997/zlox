@@ -30,9 +30,16 @@ pub const Parser = struct {
     token_number: usize,
     current: Token,
     previous: Token,
+    op_last: bool,
 
     pub fn init(allocator: std.mem.Allocator) Self {
-        return .{ .chunk = Chunk.init(allocator), .scanner = null, .token_number = 0, .current = Token.default(), .previous = Token.default() };
+        return .{ 
+            .chunk = Chunk.init(allocator), 
+            .scanner = null, .token_number = 0, 
+            .current = Token.default(), 
+            .previous = Token.default(), 
+            .op_last = true 
+        };
     }
 
     pub fn deinit(self: *Self) void {
@@ -71,6 +78,7 @@ pub const Parser = struct {
             return;
         self.previous = self.current;
         self.current = self.scanner.?.getToken(self.token_number);
+        std.debug.print("{s}\n", .{@tagName(self.current.tok_type)});
         self.token_number += 1;
     }
 
@@ -78,6 +86,7 @@ pub const Parser = struct {
         const val = try self.scanner.?.getValue(self.current, self.chunk.static_alloc.allocator());
         try self.emitConstant(val, self.current.line);
         try self.consume(self.current.tok_type);
+        self.op_last = false;
     }
 
     fn consume(self: *Self, tok_type: TokenType) !void {
@@ -97,6 +106,7 @@ pub const Parser = struct {
 
     fn stackOp(self: *Self, prec: u8, op: OpCode, tok: TokenType) !void {
         try self.consume(tok);
+        self.op_last = true;
         try self.expression(prec);
         try self.emitCode(op, self.current.line);
     }
@@ -131,6 +141,7 @@ pub const Parser = struct {
 
     fn expression(self: *Self, prec: u8) (ParseFloatError || Allocator.Error || InterpretError)!void {
         while (true) {
+            std.debug.print(" {d}\n", .{prec});
             switch (self.current.tok_type) {
                 .TOKEN_QUESTION => try self.ternary(),
                 .TOKEN_LEFT_PAREN => try self.grouping(),
@@ -140,7 +151,9 @@ pub const Parser = struct {
                 .TOKEN_FALSE => try self.value(),
                 .TOKEN_NIL => try self.value(),
                 .TOKEN_PLUS => if (prec < PREC_TERM) try self.add() else return,
-                .TOKEN_MINUS => if (prec < PREC_TERM) try self.subtract() else if (prec < PREC_UNARY) try self.negate() else return,
+                .TOKEN_MINUS => if (!self.op_last and prec < PREC_TERM) try self.subtract() 
+                                else if (self.op_last and prec < PREC_UNARY) try self.negate() 
+                                else return,
                 .TOKEN_BANG => if (prec < PREC_UNARY) try self.stackOp(PREC_UNARY, .OP_NOT, .TOKEN_BANG),
                 .TOKEN_STAR => if (prec < PREC_FACTOR) try self.multiply() else return,
                 .TOKEN_SLASH => if (prec < PREC_FACTOR) try self.divide() else return,
@@ -164,7 +177,7 @@ pub const Parser = struct {
                 try self.stackOp(PREC_ASSIGNMENT, .OP_STRING, .TOKEN_PRINT);
                 try self.emitCode(.OP_PRINT, self.current.line);
             },
-            else => { try self.expression(PREC_ASSIGNMENT); },
+            else => try self.expression(PREC_ASSIGNMENT),
         }
     }
 

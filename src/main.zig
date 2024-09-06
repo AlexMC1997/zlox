@@ -132,7 +132,7 @@ test "expression" {
 
     try vm.interpret(&parser.chunk, writer, null, true);
 
-    try expectValue(ValueType.t_number, vm.stack.getLast(), (3.0 - -3.4 * 4.0 / -(51 + 2.0)));
+    try expectValue(ValueType.t_number, vm.stack.getLast(), (-3.0 - -3.4 * 4.0 / -(51 + 2.0) - 5));
 }
 
 test "logic" {
