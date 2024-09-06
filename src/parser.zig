@@ -78,7 +78,6 @@ pub const Parser = struct {
             return;
         self.previous = self.current;
         self.current = self.scanner.?.getToken(self.token_number);
-        std.debug.print("{s}\n", .{@tagName(self.current.tok_type)});
         self.token_number += 1;
     }
 
@@ -141,7 +140,6 @@ pub const Parser = struct {
 
     fn expression(self: *Self, prec: u8) (ParseFloatError || Allocator.Error || InterpretError)!void {
         while (true) {
-            std.debug.print(" {d}\n", .{prec});
             switch (self.current.tok_type) {
                 .TOKEN_QUESTION => try self.ternary(),
                 .TOKEN_LEFT_PAREN => try self.grouping(),
