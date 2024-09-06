@@ -100,15 +100,18 @@ pub const Chunk = struct {
         }
         const instr: OpCode = @enumFromInt(self.code.items[offset]);
         var buf: [256]u8 = undefined;
+        var alloc = std.heap.FixedBufferAllocator.init(&buf);
         switch (instr) {
             .OP_CONSTANT => {
                 const constantInd = self.code.items[offset + 1];
-                try writer.print("OP_CONSTANT {} {s}\n", .{ constantInd, try self.constants.items[constantInd].toString(&buf) });
+                const str = try self.constants.items[constantInd].toString(alloc.allocator());
+                try writer.print("OP_CONSTANT {} {s}\n", .{ constantInd,  str});
                 return offset + 2;
             },
             .OP_CONSTANT_LONG => {
                 const constantInd: usize = @as(usize, self.code.items[offset + 1]) + (@as(usize, self.code.items[offset + 1]) << 8) + (@as(usize, self.code.items[offset + 1]) << 16);
-                try writer.print("OP_CONSTANT {} {s}\n", .{ constantInd, try self.constants.items[constantInd].toString(&buf) });
+                const str = try self.constants.items[constantInd].toString(alloc.allocator());
+                try writer.print("OP_CONSTANT {} {s}\n", .{ constantInd, str});
                 return offset + 4;
             },
             else => {

@@ -29,9 +29,10 @@ pub const Object = struct {
         }));
     }
 
-    pub fn toStringAlloc(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
+    pub fn opString(self: *const Self, allocator: std.mem.Allocator) String {
+        _ = allocator;
         return switch (self.type) {
-            .t_string => try allocator.dupe(u8, Sub(.t_string).from(self).data),
+            .t_string => Sub(.t_string).from(self).*,
         };
     }
  };

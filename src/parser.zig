@@ -160,7 +160,10 @@ pub const Parser = struct {
 
     fn statement(self: *Self) !void {
         switch (self.current.tok_type) {
-            .TOKEN_PRINT => try self.stackOp(PREC_ASSIGNMENT, .OP_PRINT, .TOKEN_PRINT),
+            .TOKEN_PRINT => {
+                try self.stackOp(PREC_ASSIGNMENT, .OP_STRING, .TOKEN_PRINT);
+                try self.emitCode(.OP_PRINT, self.current.line);
+            },
             else => { try self.expression(PREC_ASSIGNMENT); },
         }
     }

@@ -5,6 +5,7 @@ const Value = @import("./value.zig").Value;
 const ValueType = @import("./value.zig").ValueType;
 const Object = @import("object.zig").Object;
 const ObjectType = @import("object.zig").ObjectType;
+const String = @import("string.zig").String;
 const InterpretError = @import("zlox.zig").InterpretError;
 
 pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
@@ -29,9 +30,10 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
 
         pub fn printStack(self: Self) !void {
             try self.trace_writer.?.print("   ", .{});
-            var buf: [256]u8 = undefined;
             for (self.stack.items) |v| {
-                try self.trace_writer.?.print("[ {s} ]", .{try v.toString(&buf)});
+                const str = try v.toString(self.heap_alloc);
+                defer self.heap_alloc.free(str);
+                try self.trace_writer.?.print("[ {s} ]", .{str});
             }
             try self.trace_writer.?.print("\n", .{});
         }
@@ -183,18 +185,29 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
             self.ip += 1;
         }
 
+        fn opString(self: *Self) !void {
+            const str: *String = try self.heap_alloc.create(String); 
+            str.* = try self.stack.pop().opString(self.heap_alloc);
+            try self.stack.append(.{ .t_obj = @alignCast(@ptrCast(str)) });
+            self.ip += 1;
+        }
+
         fn print(self: *Self) !void {
             self.ip += 1;
             if (OutputWriter == void) {
                 return;
             } else {
                 const v: Value = self.stack.pop();
-                const str: []u8 = switch (v) {
-                    ValueType.t_obj => |obj| try obj.toStringAlloc(self.heap_alloc),
-                    else => try v.toStringAlloc(self.heap_alloc),
-                };
-                defer self.heap_alloc.free(str);
-                try self.out.?.print("{s}", .{str});
+                switch (v) {
+                    .t_obj => |obj| switch (obj.type) {
+                        .t_string => {
+                            const str = Object.Sub(.t_string).from(obj);
+                            try self.out.?.print("{s}", .{str.data});
+                        },
+                        // else => try self.logError(.OP_PRINT, v),
+                    },
+                    else => try self.logError(.OP_PRINT, v),
+                }
             }
         }
 
@@ -221,6 +234,7 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
                     .OP_LEQ => try self.opLeq(),
                     .OP_LT => try self.opLt(),
                     .OP_GT => try self.opGt(),
+                    .OP_STRING => try self.opString(),
                     .OP_PRINT => try self.print(),
                     .OP_POP => _ = self.stack.pop(),
                     .OP_RETURN => return,
@@ -230,8 +244,10 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
         }
 
         pub fn logTypeError(self: *const Self, op: OpCode, v1: Value, v2: Value) !void {
-            var buf1: [256]u8 = undefined;
-            var buf2: [256]u8 = undefined;
+            const str1 = try v1.toString(self.heap_alloc);
+            defer self.heap_alloc.free(str1);
+            const str2 = try v2.toString(self.heap_alloc);
+            defer self.heap_alloc.free(str2);
             try self.trace_writer.?.print(
                 "[Line {}] RUNTIME ERROR: {s} called on operands of type {s}, {s} with values {s}, {s}.\n", 
                 .{ 
@@ -239,17 +255,18 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
                     @tagName(op), 
                     @tagName(v1), 
                     @tagName(v2), 
-                    try v1.toString(&buf1), 
-                    try v2.toString(&buf2) 
+                    str1, 
+                    str2 
                 }
             );
         }
 
         pub fn logError(self: *const Self, op: OpCode, val: Value) !void {
-            var buf: [256]u8 = undefined;
+            const str = try val.toString(self.heap_alloc);
+            defer self.heap_alloc.free(str);
             try self.trace_writer.?.print(
                 "[Line {}] RUNTIME ERROR: {s} called on operand of type {s} with value {s}.\n", 
-                .{ self.chunk.?.getLine(self.ip), @tagName(op), @tagName(val), try val.toString(&buf) }
+                .{ self.chunk.?.getLine(self.ip), @tagName(op), @tagName(val), str }
             );
         }
 

@@ -36,6 +36,30 @@ pub const String = struct {
         return std.mem.eql(u8, self.data, rhs.data);
     }
 
+    pub fn toString(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
+        var len: usize = 0;
+        for (self.data) |c| switch (c) {
+            '\n' => len += 2,
+            else => len += 1,
+        };
+        var buf = try allocator.alloc(u8, len);
+        defer allocator.free(buf);
+        var j: usize = 0;
+        for (self.data) |c| switch (c) {
+            '\n' => {
+                buf[j] = '\\';
+                j += 1;
+                buf[j] = 'n';
+                j += 1;
+            },
+            else => {
+                buf[j] = c;
+                j += 1;
+            }
+        };
+        return std.fmt.allocPrint(allocator, "\"{s}\"", .{buf});
+    }
+
     pub fn opAdd(s1: *const Self, s2: *const Self, allocator: std.mem.Allocator) !*Self {
         var s3: *String = try String.newEmpty(s1.data.len + s2.data.len, allocator);
         @memcpy(s3.data[0..s1.data.len], s1.data);
