@@ -15,13 +15,23 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
         ip: usize,
         stack: std.ArrayList(Value),
         heap_alloc: std.mem.Allocator,
+        globals: std.StringHashMap(Value),
         chunk: ?*const Chunk,
         trace_writer: ?TraceWriter,
         out: ?OutputWriter,
         debug: bool,
 
         pub fn init(allocator: std.mem.Allocator) Self {
-            return .{ .ip = 0, .stack = std.ArrayList(Value).init(allocator), .heap_alloc = allocator, .chunk = null, .trace_writer = null, .out = null, .debug = false };
+            return .{ 
+                .ip = 0, 
+                .stack = std.ArrayList(Value).init(allocator), 
+                .heap_alloc = allocator, 
+                .globals = std.StringHashMap(Value).init(allocator),
+                .chunk = null, 
+                .trace_writer = null, 
+                .out = null, 
+                .debug = false 
+            };
         }
 
         pub fn deinit(self: Self) void {
@@ -29,11 +39,26 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
         }
 
         pub fn printStack(self: Self) !void {
-            try self.trace_writer.?.print("   ", .{});
+            var buf: [256]u8 = undefined;
+            var buf_alloc = std.heap.FixedBufferAllocator.init(&buf);
+            try self.trace_writer.?.print("STACK:   ", .{});
             for (self.stack.items) |v| {
-                const str = try v.toString(self.heap_alloc);
-                defer self.heap_alloc.free(str);
+                const str = try v.toString(buf_alloc.allocator());
                 try self.trace_writer.?.print("[ {s} ]", .{str});
+            }
+            try self.trace_writer.?.print("\n", .{});
+        }
+
+        pub fn printGlobals(self: Self) !void {
+            var buf: [256]u8 = undefined;
+            var buf_alloc = std.heap.FixedBufferAllocator.init(&buf);
+            try self.trace_writer.?.print("GLOBALS:   ", .{});
+            var it = self.globals.keyIterator();
+            while (it.next()) |k| {
+                const v = self.globals.get(k.*) orelse return;
+                const s = try v.toString(buf_alloc.allocator());
+                try self.trace_writer.?.print("[ {s} : {s} ]", .{k.*, s});
+
             }
             try self.trace_writer.?.print("\n", .{});
         }
@@ -192,6 +217,34 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
             self.ip += 1;
         }
 
+        fn opAssign(self: *Self) !void {
+            const v2: Value = self.stack.pop();
+            const v1 = try Unpack(.t_obj)
+                .get(self, self.stack.pop(), .OP_GT);
+            if (v1.type != .t_string) {
+                try self.logTypeError(.OP_ASSIGN, v1, v2);
+                return InterpretError.INTERPRET_RUNTIME_ERROR;
+            }
+            const ident = Object.Sub(.t_string).from(v1);
+            try self.globals.put(ident.data, v2);
+            self.ip += 1;
+        }
+
+        fn opVar(self: *Self) !void {
+            const v = try Unpack(.t_obj)
+                .get(self, self.stack.pop(), .OP_GT);
+            if (v.type != .t_string) {
+                try self.logError(.OP_ASSIGN, v);
+                return InterpretError.INTERPRET_RUNTIME_ERROR;
+            }
+            const ident = Object.Sub(.t_string).from(v);
+            try self.stack.append(self.globals.get(ident.data) orelse {
+                try self.trace_writer.?.print("[Line {}] RUNTIME ERROR: Symbol \"{s}\" not defined.\n", .{self.chunk.?.getLine(self.ip), ident.data});
+                return InterpretError.INTERPRET_RUNTIME_ERROR; 
+            });
+            self.ip += 1;
+        }
+ 
         fn print(self: *Self) !void {
             self.ip += 1;
             if (OutputWriter == void) {
@@ -216,6 +269,7 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
             while (true) : (instr = self.chunk.?.getInstr(self.ip)) {
                 if (self.debug) {
                     try self.printStack();
+                    try self.printGlobals();
                     _ = try self.chunk.?.disassembleInstr(self.ip, self.trace_writer.?);
                 }
                 switch (instr) {
@@ -237,6 +291,8 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
                     .OP_STRING => try self.opString(),
                     .OP_PRINT => try self.print(),
                     .OP_POP => _ = self.stack.pop(),
+                    .OP_ASSIGN => try self.opAssign(),
+                    .OP_VAR => try self.opVar(),
                     .OP_RETURN => return,
                     // else =>
                 }

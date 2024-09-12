@@ -2,6 +2,7 @@ const std = @import("std");
 const zlox = @import("./zlox.zig");
 const Value = @import("./value.zig").Value;
 const ValueType = @import("./value.zig").ValueType;
+const Object = @import("object.zig").Object;
 
 const test_path = "./test/";
 
@@ -232,4 +233,43 @@ test "print" {
     for (0..@min(in.len, out.len)) |i| {
         try expectEqual(out[i], in[i]);
     } 
+}
+
+test "vars" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+
+    const writer = std.io.getStdErr().writer();
+    const path = test_path ++ "vars.lox";
+
+    const file: std.fs.File = std.fs.cwd().openFile(path, .{}) catch try std.fs.openFileAbsolute(path, .{});
+    defer file.close();
+
+    const out_file: std.fs.File = try std.fs.cwd().createFile(test_path ++ "out/print.out", .{});
+    defer out_file.close();
+
+    var scanner = try zlox.Scanner.init(file.reader(), allocator);
+    defer scanner.deinit();
+
+    var parser = zlox.Parser.init(allocator);
+    defer parser.deinit();
+
+    var vm = zlox.VM(std.fs.File.Writer, std.fs.File.Writer).init(allocator);
+    defer vm.deinit();
+
+    try scanner.scan();
+    try scanner.printTokens(writer);
+
+    try parser.parse(&scanner);
+    try parser.chunk.disassemble("test_program", writer);
+
+    try vm.interpret(&parser.chunk, writer, out_file.writer(), true);
+
+    const v = vm.stack.getLast();
+    const s = Object.Sub(.t_string).from(switch (v) {
+        .t_obj => |obj| obj,
+        else => return error.TestUnexpectedResult,
+    });
+
+    try expect(std.mem.eql(u8, s.data, "woah woah buddy woah woah"));
 }

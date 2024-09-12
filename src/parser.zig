@@ -138,6 +138,14 @@ pub const Parser = struct {
         try self.expression(PREC_TERNARY);
     }
 
+    fn variable(self: *Self) !void {
+        const line = self.current.line;
+        try self.value();
+        if (self.current.tok_type != .TOKEN_EQUAL) {
+           try self.emitCode(.OP_VAR, line);
+        }
+    }
+
     fn expression(self: *Self, prec: u8) (ParseFloatError || Allocator.Error || InterpretError)!void {
         while (true) {
             switch (self.current.tok_type) {
@@ -162,6 +170,9 @@ pub const Parser = struct {
                 .TOKEN_EQUAL_EQUAL => if (prec < PREC_EQUALITY) try self.stackOp(PREC_EQUALITY, .OP_EQ, .TOKEN_EQUAL_EQUAL) else return,
                 .TOKEN_AND => if (prec < PREC_AND) try self.stackOp(PREC_AND, .OP_AND, .TOKEN_AND) else return,
                 .TOKEN_OR => if (prec < PREC_OR) try self.stackOp(PREC_OR, .OP_OR, .TOKEN_OR) else return,
+                .TOKEN_IDENTIFIER => try self.variable(),
+                .TOKEN_EQUAL => if (prec < PREC_ASSIGNMENT) try self.stackOp(prec, .OP_ASSIGN, .TOKEN_EQUAL) 
+                                else return InterpretError.INTERPRET_SYNTAX_ERROR,
                 // .TOKEN_SEMICOLON => return std.debug.print("Reached end of statement.\n", .{}),
                 // .TOKEN_EOF => return std.debug.print("Reached end of file.\n", .{}),
                 else => return,
@@ -175,23 +186,22 @@ pub const Parser = struct {
                 try self.stackOp(PREC_ASSIGNMENT, .OP_STRING, .TOKEN_PRINT);
                 try self.emitCode(.OP_PRINT, self.current.line);
             },
-            else => try self.expression(PREC_ASSIGNMENT),
+            else => try self.expression(PREC_NONE),
         }
     }
 
-    fn variable(self: *Self) !void {
-        try self.value();
+    fn varDef(self: *Self) !void {
+        try self.consume(.TOKEN_VAR);
         if (self.current.tok_type != .TOKEN_IDENTIFIER) {
             return InterpretError.INTERPRET_SYNTAX_ERROR;
         }
-        try self.consume(.TOKEN_IDENTIFIER);
-        try self.consume(.TOKEN_EQUAL);
-        try self.expression(PREC_ASSIGNMENT);
+        try self.value();
+        try self.stackOp(PREC_ASSIGNMENT, .OP_ASSIGN, .TOKEN_EQUAL);
     }
 
     fn declaration(self: *Self) !void {
         if (self.current.tok_type == .TOKEN_VAR) {
-            try self.variable();
+            try self.varDef();
         } else {
             try self.statement();
         }

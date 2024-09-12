@@ -92,7 +92,7 @@ pub const Scanner = struct {
             TokenType.TOKEN_TRUE => .{ .t_boolean = true },
             TokenType.TOKEN_FALSE => .{ .t_boolean = false },
             TokenType.TOKEN_NIL => .{ .t_nil = undefined },
-            TokenType.TOKEN_STRING, TokenType.TOKEN_VAR => 
+            TokenType.TOKEN_STRING, TokenType.TOKEN_IDENTIFIER => 
                 .{ .t_obj = @ptrCast(try readStringValue(self.read_buf[token.start..(token.start + token.len)], allocator)) },
             else => .{ .t_nil = undefined },
         };
