@@ -223,7 +223,7 @@ test "print" {
     try parser.chunk.disassemble("test_program", writer);
 
     try vm.interpret(&parser.chunk, writer, out_file.writer(), true);
-
+    
     var buf_out: [1024]u8 = undefined;
     var buf_in: [1024]u8 = undefined;
 

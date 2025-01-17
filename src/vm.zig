@@ -220,7 +220,7 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
         fn opAssign(self: *Self) !void {
             const v2: Value = self.stack.pop();
             const v1 = try Unpack(.t_obj)
-                .get(self, self.stack.pop(), .OP_GT);
+                .get(self, self.stack.pop(), .OP_ASSIGN);
             if (v1.type != .t_string) {
                 try self.logTypeError(.OP_ASSIGN, v1, v2);
                 return InterpretError.INTERPRET_RUNTIME_ERROR;
@@ -326,7 +326,7 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
             );
         }
 
-        pub fn interpret(self: *Self, chunk: *const Chunk, trace_writer: TraceWriter, out: ?OutputWriter, debug: bool) !void {
+        pub fn interpret(self: *Self, chunk: *const Chunk, trace_writer: ?TraceWriter, out: ?OutputWriter, debug: bool) !void {
             self.ip = 0;
             self.stack.clearAndFree();
             self.chunk = chunk;

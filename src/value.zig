@@ -2,7 +2,7 @@ const std = @import("std");
 const Object = @import("./object.zig").Object;
 const String = @import("./string.zig").String;
 
-pub const ValueType = enum { t_number, t_boolean, t_nil, t_obj };
+pub const ValueType = enum { t_number, t_boolean, t_obj, t_nil };
 pub const Value = union(ValueType) {
     const Self = @This();
     pub const NumberType = f64;

@@ -21,13 +21,13 @@ pub const String = struct {
     }
 
     pub fn new(str: []u8, allocator: std.mem.Allocator) !*Self {
-        var obj: *Self = try allocator.create(Self);
+        const obj: *Self = try allocator.create(Self);
         obj.* = try String.init(str, allocator);
         return obj;
     }
 
     pub fn newEmpty(sz: usize, allocator: std.mem.Allocator) !*Self {
-        var obj: *Self = try allocator.create(Self);
+        const obj: *Self = try allocator.create(Self);
         obj.* = try String.initEmpty(sz, allocator);
         return obj;
     }

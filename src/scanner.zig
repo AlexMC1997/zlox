@@ -81,7 +81,7 @@ pub const Scanner = struct {
             }
             n += 1;
         }
-        var ret: *String = try String.newEmpty(n, allocator);
+        const ret: *String = try String.newEmpty(n, allocator);
         @memcpy(ret.data, str[0..n]);
         return ret;
     }

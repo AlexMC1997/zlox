@@ -3,7 +3,8 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
         .name = "zlox",
-        .root_source_file = .{ .path = "./src/main.zig" },
+        .root_source_file = .{ .cwd_relative = "./src/main.zig" },
+        .target = b.host
     });
 
     b.installArtifact(exe);

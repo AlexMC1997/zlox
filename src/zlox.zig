@@ -26,7 +26,7 @@ pub fn runFile(path: []const u8, writer: anytype, allocator: Allocator) !void {
     var parser = Parser.init(allocator);
     defer parser.deinit();
 
-    var vm = VM.init(allocator);
+    var vm = VM(@TypeOf(writer), @TypeOf(writer)).init(allocator);
     defer vm.deinit();
 
     try scanner.scan();
@@ -36,5 +36,5 @@ pub fn runFile(path: []const u8, writer: anytype, allocator: Allocator) !void {
 
     // try parser.chunk.disassemble("Test Prog", std.io.getStdOut().writer());
 
-    try vm.interpret(&parser.chunk, writer);
+    try vm.interpret(&parser.chunk, writer, writer, false);
 }
