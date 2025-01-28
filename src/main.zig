@@ -266,7 +266,7 @@ test "vars" {
     try vm.interpret(&parser.chunk, writer, out_file.writer(), true);
 
     const v = vm.stack.getLast();
-    const s = Object.Sub(.t_string).from(switch (v) {
+    const s = Object.SubCast(.t_string).from(switch (v) {
         .t_obj => |obj| obj,
         else => return error.TestUnexpectedResult,
     });

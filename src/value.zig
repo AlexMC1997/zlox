@@ -16,6 +16,15 @@ pub const Value = union(ValueType) {
         return .{ .t_number = try std.fmt.parseFloat(NumberType, s) };
     }
 
+    pub fn typeName(self: *const Self) []const u8 {
+        return switch (self.*) {
+            .t_number => "Number",
+            .t_boolean => "Boolean",
+            .t_obj => |val| val.subName(),
+            .t_nil => "Nil",
+        };
+    }
+
     pub fn toString(self: Self, allocator: std.mem.Allocator) ![]u8 {
         return switch (self) {
             .t_number => |val| try std.fmt.allocPrint(allocator, "{}", .{val}),
@@ -47,10 +56,13 @@ pub const Value = union(ValueType) {
             .t_nil => true,
             .t_boolean => self.t_boolean == rhs.t_boolean,
             .t_obj => |val| blk1: {
+                if (std.meta.activeTag(rhs) != .t_obj) {
+                    return false;
+                }
                 break :blk1 switch (val.type) {
                     .t_string => blk2: {
-                        const str1: *const String = @alignCast(@ptrCast(val));
-                        const str2: *const String = @alignCast(@ptrCast(rhs.t_obj));
+                        const str1 = Object.SubCast(.t_string).from(val);
+                        const str2 = Object.SubCast(.t_string).from(rhs.t_obj);
                         break :blk2 str1.eq(str2);
                     },
                     // else => false,

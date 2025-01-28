@@ -107,7 +107,7 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
             switch (v1) {
                 .t_number => try self.stack.append(.{ .t_number = v1.t_number + v2.t_number }),
                 .t_obj => try self.stack.append(
-                    .{.t_obj = try Object.opAdd(v1.t_obj, v2.t_obj, self.heap_alloc)}
+                    .{.t_obj = Object.opAdd(v1.t_obj, v2.t_obj, self.heap_alloc) catch return try self.logTypeError( .OP_ADD, v1, v2)}
                 ),
                 else => try self.logTypeError( .OP_ADD, v1, v2),
             }
@@ -225,7 +225,7 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
                 try self.logTypeError(.OP_ASSIGN, v1, v2);
                 return InterpretError.INTERPRET_RUNTIME_ERROR;
             }
-            const ident = Object.Sub(.t_string).from(v1);
+            const ident = Object.SubCast(.t_string).from(v1);
             try self.globals.put(ident.data, v2);
             self.ip += 1;
         }
@@ -237,7 +237,7 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
                 try self.logError(.OP_ASSIGN, v);
                 return InterpretError.INTERPRET_RUNTIME_ERROR;
             }
-            const ident = Object.Sub(.t_string).from(v);
+            const ident = Object.SubCast(.t_string).from(v);
             try self.stack.append(self.globals.get(ident.data) orelse {
                 try self.trace_writer.?.print("[Line {}] RUNTIME ERROR: Symbol \"{s}\" not defined.\n", .{self.chunk.?.getLine(self.ip), ident.data});
                 return InterpretError.INTERPRET_RUNTIME_ERROR; 
@@ -254,7 +254,7 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
                 switch (v) {
                     .t_obj => |obj| switch (obj.type) {
                         .t_string => {
-                            const str = Object.Sub(.t_string).from(obj);
+                            const str = Object.SubCast(.t_string).from(obj);
                             try self.out.?.print("{s}", .{str.data});
                         },
                         // else => try self.logError(.OP_PRINT, v),
@@ -305,12 +305,12 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
             const str2 = try v2.toString(self.heap_alloc);
             defer self.heap_alloc.free(str2);
             try self.trace_writer.?.print(
-                "[Line {}] RUNTIME ERROR: {s} called on operands of type {s}, {s} with values {s}, {s}.\n", 
+                "[Line {}] RUNTIME ERROR: {s} called on operands of types {s}, {s} with values {s}, {s}.\n", 
                 .{ 
                     self.chunk.?.getLine(self.ip), 
                     @tagName(op), 
-                    @tagName(v1), 
-                    @tagName(v2), 
+                    v1.typeName(), 
+                    v2.typeName(), 
                     str1, 
                     str2 
                 }
@@ -322,7 +322,7 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
             defer self.heap_alloc.free(str);
             try self.trace_writer.?.print(
                 "[Line {}] RUNTIME ERROR: {s} called on operand of type {s} with value {s}.\n", 
-                .{ self.chunk.?.getLine(self.ip), @tagName(op), @tagName(val), str }
+                .{ self.chunk.?.getLine(self.ip), @tagName(op), val.typeName(), str }
             );
         }
 
