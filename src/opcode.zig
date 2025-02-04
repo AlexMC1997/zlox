@@ -20,4 +20,6 @@ pub const OpCode = enum(u8) {
     OP_ASSIGN,
     OP_VAR,
     OP_RETURN,
+    OP_GET,
+    OP_SET,
 };

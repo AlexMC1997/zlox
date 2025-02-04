@@ -1,0 +1,14 @@
+var global = "global";
+var shadowed = "upper";
+{
+    var local = "local";
+    print shadowed + local + global + "\n";
+    var shadowed = "lower";
+    print shadowed + local + global + "\n";
+    {
+        var local = "innerlocal";
+        print shadowed + local + global + "\n";
+        var global = "shadowedglobal";
+        print shadowed + local + global + "\n";
+    }
+}

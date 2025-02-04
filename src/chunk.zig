@@ -14,8 +14,8 @@ pub const Chunk = struct {
         return Self { 
             .code = std.ArrayList(u8).init(allocator), 
             .constants = std.ArrayList(Value).init(allocator), 
-            .lint_numbers = std.ArrayList(usize).init(allocator), 
-            .static_alloc = std.heap.ArenaAllocator.init(allocator) 
+            .lint_numbers = std.ArrayList(usize).init(allocator),
+            .static_alloc = std.heap.ArenaAllocator.init(allocator),
         };
     }
 
@@ -23,6 +23,7 @@ pub const Chunk = struct {
         self.code.deinit();
         self.lint_numbers.deinit();
         self.constants.deinit();
+        self.static_alloc.deinit();
         return;
     }
 

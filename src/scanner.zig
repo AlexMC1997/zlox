@@ -64,12 +64,13 @@ pub const Scanner = struct {
         return self.tokens.items[index];
     }
 
-    pub fn readStringValue(source: []u8, allocator: Allocator) !*String {
+    pub fn readStringValue(self: Self, token: Token, allocator: Allocator) ![]u8 {
+        const source = self.read_buf[token.start..(token.start + token.len)];
         var str = try allocator.alloc(u8, source.len);
         var n: usize = 0;
         var i: usize = 0;
         while (i < source.len) : (i += 1) {
-            if (i < source.len and source[i] == '\\') {
+            if (i+1 < source.len and source[i] == '\\') {
                 i += 1;
                 switch (source[i]) {
                     'n' => str[n] = '\n',
@@ -81,9 +82,7 @@ pub const Scanner = struct {
             }
             n += 1;
         }
-        const ret: *String = try String.newEmpty(n, allocator);
-        @memcpy(ret.data, str[0..n]);
-        return ret;
+        return str[0..n];
     }
 
     pub fn getValue(self: Self, token: Token, allocator: anytype) !Value {
@@ -92,8 +91,11 @@ pub const Scanner = struct {
             TokenType.TOKEN_TRUE => .{ .t_boolean = true },
             TokenType.TOKEN_FALSE => .{ .t_boolean = false },
             TokenType.TOKEN_NIL => .{ .t_nil = undefined },
-            TokenType.TOKEN_STRING, TokenType.TOKEN_IDENTIFIER => 
-                .{ .t_obj = @ptrCast(try readStringValue(self.read_buf[token.start..(token.start + token.len)], allocator)) },
+            TokenType.TOKEN_STRING, TokenType.TOKEN_IDENTIFIER => blk: {
+                const str: *String = try allocator.create(String);
+                str.* = String.fromSlice(try self.readStringValue(token, allocator));
+                break :blk .{ .t_obj = @ptrCast(str)};
+            },
             else => .{ .t_nil = undefined },
         };
     }

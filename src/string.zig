@@ -32,6 +32,10 @@ pub const String = struct {
         return obj;
     }
 
+    pub fn fromSlice(slice: []u8) Self {
+        return .{ .metadata = .{.type = .t_string}, .data = slice};
+    }
+
     pub fn eq(self: *const Self, rhs: *const Self) bool {
         return std.mem.eql(u8, self.data, rhs.data);
     }

@@ -232,7 +232,7 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
 
         fn opVar(self: *Self) !void {
             const v = try Unpack(.t_obj)
-                .get(self, self.stack.pop(), .OP_GT);
+                .get(self, self.stack.pop(), .OP_VAR);
             if (v.type != .t_string) {
                 try self.logError(.OP_ASSIGN, v);
                 return InterpretError.INTERPRET_RUNTIME_ERROR;
@@ -242,6 +242,19 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
                 try self.trace_writer.?.print("[Line {}] RUNTIME ERROR: Symbol \"{s}\" not defined.\n", .{self.chunk.?.getLine(self.ip), ident.data});
                 return InterpretError.INTERPRET_RUNTIME_ERROR; 
             });
+            self.ip += 1;
+        }
+
+        fn opGet(self: *Self) !void {
+            const ind: usize = @intFromFloat(self.stack.pop().t_number);
+            try self.stack.append(self.stack.items[ind]);
+            self.ip += 1;
+        }
+
+        fn opSet(self: *Self) !void {
+            const val = self.stack.pop();
+            const ind: usize = @intFromFloat(self.stack.pop().t_number);
+            self.stack.items[ind] = val;
             self.ip += 1;
         }
  
@@ -293,6 +306,8 @@ pub fn VM(comptime TraceWriter: type, comptime OutputWriter: type) type {
                     .OP_POP => _ = self.stack.pop(),
                     .OP_ASSIGN => try self.opAssign(),
                     .OP_VAR => try self.opVar(),
+                    .OP_GET => try self.opGet(),
+                    .OP_SET => try self.opSet(),
                     .OP_RETURN => return,
                     // else =>
                 }

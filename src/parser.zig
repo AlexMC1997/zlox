@@ -25,38 +25,58 @@ const PREC_PRIMARY: u8 = 11;
 pub const Parser = struct {
     const Self = @This();
 
-    chunk: Chunk,
+    const Local = struct {
+        id: []u8,
+        depth: usize,
+
+        pub fn init(id: []u8, depth: usize) Local {
+            return .{.id = id, .depth = depth};
+        }
+    };
+
+    parse_alloc: std.heap.ArenaAllocator, 
+    chunk: ?Chunk,
     scanner: ?*const Scanner,
     token_number: usize,
     current: Token,
     previous: Token,
     op_last: bool,
+    depth: usize,
+    locals: std.ArrayList(Local),
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return .{ 
-            .chunk = Chunk.init(allocator), 
+            .parse_alloc = std.heap.ArenaAllocator.init(allocator),
+            .chunk = null, 
             .scanner = null, .token_number = 0, 
             .current = Token.default(), 
             .previous = Token.default(), 
-            .op_last = true 
+            .op_last = true,
+            .depth = 0,
+            .locals = std.ArrayList(Local).init(allocator),
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.chunk.deinit();
+        self.parse_alloc.deinit();
+        self.locals.deinit();
     }
 
-    pub fn parse(self: *Self, scanner: *const Scanner) !void {
+    pub fn parse(self: *Self, scanner: *const Scanner, allocator: std.mem.Allocator) !Chunk {
+        self.chunk = Chunk.init(allocator);
         self.scanner = scanner;
         self.nextToken();
         while (self.current.tok_type != .TOKEN_EOF) {
             self.declaration() catch |err| {
-                std.debug.print("Syntax error on line {}.\n", .{self.current.line});
+                std.debug.print("Syntax error on line {} token {s}.\n", .{self.current.line, @tagName(self.current.tok_type)});
                 return err;
             };
         }
         try self.emitCode(.OP_RETURN, self.current.line);
         self.scanner = null;
+        const chunk = self.chunk orelse return InterpretError.INTERPRET_COMPILE_ERROR;
+        self.chunk = null;
+        return chunk;
     }
 
     fn tokenData(self: *const Self) []const u8 {
@@ -65,12 +85,12 @@ pub const Parser = struct {
 
     fn emitConstant(self: *Self, val: Value, line: usize) !void {
         // std.debug.print("Emitting constant {} on line {}.\n", .{ val, line });
-        try self.chunk.writeConstant(val, line);
+        try self.chunk.?.writeConstant(val, line);
     }
 
     fn emitCode(self: *Self, code: OpCode, line: usize) !void {
         // std.debug.print("Emitting op on line {}.\n", .{line});
-        try self.chunk.writeOpCode(code, line);
+        try self.chunk.?.writeOpCode(code, line);
     }
 
     fn nextToken(self: *Self) void {
@@ -82,7 +102,7 @@ pub const Parser = struct {
     }
 
     fn value(self: *Self) !void {
-        const val = try self.scanner.?.getValue(self.current, self.chunk.static_alloc.allocator());
+        const val = try self.scanner.?.getValue(self.current, self.chunk.?.static_alloc.allocator());
         try self.emitConstant(val, self.current.line);
         try self.consume(self.current.tok_type);
         self.op_last = false;
@@ -138,11 +158,34 @@ pub const Parser = struct {
         try self.expression(PREC_TERNARY);
     }
 
+    fn findLastLocal(self: *Self) !?usize {
+        const ident = try self.scanner.?.readStringValue(self.current, self.parse_alloc.allocator());
+        var it = std.mem.reverseIterator(self.locals.items);
+        while (it.next()) |l| {
+            if (std.mem.eql(u8, l.id, ident)) {
+                return it.index;
+            }
+        }
+        return null;
+    }
+
     fn variable(self: *Self) !void {
         const line = self.current.line;
-        try self.value();
-        if (self.current.tok_type != .TOKEN_EQUAL) {
-           try self.emitCode(.OP_VAR, line);
+        const ind = try self.findLastLocal();
+        if (self.depth == 0 or ind == null) {
+            try self.value();
+            if (self.current.tok_type != .TOKEN_EQUAL) {
+                try self.emitCode(.OP_VAR, line);
+            }
+        } else {
+            const val = Value{.t_number = @floatFromInt(ind.?)};
+            try self.consume(.TOKEN_IDENTIFIER);
+            try self.emitConstant(val, line);
+            if (self.current.tok_type != .TOKEN_EQUAL) {
+                try self.emitCode(.OP_GET, line);
+            } else {
+                try self.stackOp(PREC_ASSIGNMENT, .OP_SET, .TOKEN_EQUAL);
+            }
         }
     }
 
@@ -171,7 +214,8 @@ pub const Parser = struct {
                 .TOKEN_AND => if (prec < PREC_AND) try self.stackOp(PREC_AND, .OP_AND, .TOKEN_AND) else return,
                 .TOKEN_OR => if (prec < PREC_OR) try self.stackOp(PREC_OR, .OP_OR, .TOKEN_OR) else return,
                 .TOKEN_IDENTIFIER => try self.variable(),
-                .TOKEN_EQUAL => if (prec < PREC_ASSIGNMENT) try self.stackOp(prec, .OP_ASSIGN, .TOKEN_EQUAL) 
+                .TOKEN_EQUAL => if (prec < PREC_ASSIGNMENT) 
+                                try self.stackOp(prec, .OP_ASSIGN, .TOKEN_EQUAL) 
                                 else return InterpretError.INTERPRET_SYNTAX_ERROR,
                 // .TOKEN_SEMICOLON => return std.debug.print("Reached end of statement.\n", .{}),
                 // .TOKEN_EOF => return std.debug.print("Reached end of file.\n", .{}),
@@ -180,12 +224,23 @@ pub const Parser = struct {
         }
     }
 
+    fn block(self: *Self) (InterpretError || error{OutOfMemory, InvalidCharacter})!void
+    {
+        try self.consume(.TOKEN_LEFT_BRACE);
+        self.depth += 1;
+        while (self.current.tok_type != .TOKEN_RIGHT_BRACE) : (try self.declaration()) {}
+        while (self.locals.items.len > 0 and self.locals.getLast().depth == self.depth) : (_ = self.locals.pop()) {}
+        self.depth -= 1;
+        try self.consume(.TOKEN_RIGHT_BRACE);
+    }
+
     fn statement(self: *Self) !void {
         switch (self.current.tok_type) {
             .TOKEN_PRINT => {
                 try self.stackOp(PREC_ASSIGNMENT, .OP_STRING, .TOKEN_PRINT);
                 try self.emitCode(.OP_PRINT, self.current.line);
             },
+            .TOKEN_LEFT_BRACE => try self.block(),
             else => try self.expression(PREC_NONE),
         }
     }
@@ -195,8 +250,18 @@ pub const Parser = struct {
         if (self.current.tok_type != .TOKEN_IDENTIFIER) {
             return InterpretError.INTERPRET_SYNTAX_ERROR;
         }
-        try self.value();
-        try self.stackOp(PREC_ASSIGNMENT, .OP_ASSIGN, .TOKEN_EQUAL);
+        if (self.depth == 0) {
+            try self.value();
+            try self.stackOp(PREC_ASSIGNMENT, .OP_ASSIGN, .TOKEN_EQUAL);
+        } else {
+            const ident = try self.scanner.?.readStringValue(self.current, self.parse_alloc.allocator());
+            try self.consume(.TOKEN_IDENTIFIER);
+            self.op_last = false;
+            try self.locals.append(Local.init(ident, self.depth));
+            try self.emitConstant(Value{.t_nil = undefined}, self.current.line);
+            try self.emitConstant(Value{.t_number = @floatFromInt(self.locals.items.len - 1)}, self.current.line);
+            try self.stackOp(PREC_ASSIGNMENT, .OP_SET, .TOKEN_EQUAL);
+        }
     }
 
     fn declaration(self: *Self) !void {
@@ -204,6 +269,7 @@ pub const Parser = struct {
             try self.varDef();
         } else {
             try self.statement();
+            if (self.depth > 0 and self.current.tok_type == .TOKEN_RIGHT_BRACE) return;
         }
         self.consume(.TOKEN_SEMICOLON) catch try self.consume(.TOKEN_EOF);
     }
